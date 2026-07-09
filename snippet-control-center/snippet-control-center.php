@@ -8,7 +8,7 @@
 
  * Description: Manages and monitors custom code snippets loaded via index_card.txt, including health logging and admin utility menu.
 
- * Version: 1.1.0
+ * Version: 1.1.1
 
  * Author: Your Name
 
