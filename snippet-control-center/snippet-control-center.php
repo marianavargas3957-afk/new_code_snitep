@@ -8,7 +8,7 @@
 
  * Description: Manages and monitors custom code snippets loaded via index_card.txt, including health logging and admin utility menu.
 
- * Version: 1.0.
+ * Version: 1.1.0
 
  * Author: Your Name
 
@@ -554,7 +554,170 @@ add_action( 'init', 'hotheart_snippet_loader_init', 1 );
 
 // ── Restore from cache file if DB options are missing (runs before loader) ──
 
-if ( ! function_exists( 'hotheart_restore_cache_on_init' ) ) {
+if ( ! function_exists( 'h--- c:\Users\ssii\Local Sites\new-e\app\public\wp-content\code_snippets\new_code_snitep\snippet-control-center\snippet-control-center.php
++++ c:\Users\ssii\Local Sites\new-e\app\public\wp-content\code_snippets\new_code_snitep\snippet-control-center\snippet-control-center.php
+@@ -23,6 +23,7 @@
+     if ( function_exists( 'hotheart_scan_and_cache_modules' ) ) {
+         hotheart_scan_and_cache_modules();
+     }
++    add_option( 'hotheart_global_snippets_enabled', true, '', 'no' ); // Add global snippets enabled option
+ }
+ register_activation_hook( __FILE__, 'hotheart_snippet_control_center_activate' ); // Keep hook for future use if needed
+ 
+@@ -37,6 +38,7 @@
+     delete_option( 'hotheart_snippet_health_state' );
+     delete_option( 'hotheart_disabled_code_modules' );
+     delete_option( 'hotheart_auto_disabled_code_modules' );
++    delete_option( 'hotheart_global_snippets_enabled' ); // Clean up global snippets enabled option
+     delete_transient( 'hotheart_snippet_folders_scan' );
+ }
+ register_deactivation_hook( __FILE__, 'hotheart_snippet_control_center_deactivate' );
+@@ -176,14 +178,14 @@
+ if ( ! function_exists( 'hotheart_snippet_loader_load_modules' ) ) {
+   function hotheart_snippet_loader_load_modules() {
+     static $loaded = false;
+-    if (  ) { return; }
+-     = true;
+-
++    if (  ) { return; } // Corrected: 
++     = true; // Corrected: 
++
++    // Check global snippet status first
++     = (bool) get_option( 'hotheart_global_snippets_enabled', true ); // Corrected: 
++    if ( !  ) { // Corrected: 
++        // If global snippets are disabled, do not load any modules.
++        // hotheart_snippet_health_record( 'ok', 'All snippets globally disabled.' ); // Optionally log, but avoid excessive logging on every page load.
++        return;
++    }
++
+     // Check global snippet status first
+-     = (bool) get_option( 'hotheart_global_snippets_enabled', true );
+-    if ( !  ) {
+-        // If global snippets are disabled, do not load any modules.
+-        // hotheart_snippet_health_record( 'ok', 'All snippets globally disabled.' ); // Optionally log, but avoid excessive logging on every page load.
+-        return;
+-    }
+-
+      = trailingslashit( WP_CONTENT_DIR . '/code_snippets' );
+     if ( ! is_dir(  ) || ! is_readable(  ) ) { return; }
+ 
+@@ -455,26 +457,26 @@
+             hotheart_snippet_health_record( 'ok', 'Manual refresh: scanned and cached ' .  . ' modules.' );
+             wp_safe_redirect( add_query_arg( array( 'page' => 'hotheart-snippet-manager', 'refreshed' => '1' ), admin_url( 'admin.php' ) ) );
+             exit;
+-        } elseif ( 'toggle_global_snippets' ===  ) {
+-            if ( empty( ['hotheart_global_toggle_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( ['hotheart_global_toggle_nonce'] ) ), 'hotheart_toggle_global_snippets' ) ) {
++        } elseif ( 'toggle_global_snippets' ===  ) { // Corrected: 
++            if ( empty( ['hotheart_global_toggle_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( ['hotheart_global_toggle_nonce'] ) ), 'hotheart_toggle_global_snippets' ) ) { // Corrected: 
+                 wp_die( esc_html__( 'Nonce verification failed.', 'hotheart-snippet-control-center' ) );
+             }
+-             = (bool) get_option( 'hotheart_global_snippets_enabled', true );
+-             = ! ;
+-            update_option( 'hotheart_global_snippets_enabled', , false );
+-
+-            if (  ) {
++             = (bool) get_option( 'hotheart_global_snippets_enabled', true ); // Corrected: 
++             = ! ; // Corrected: , 
++            update_option( 'hotheart_global_snippets_enabled', , false ); // Corrected: 
++
++            if (  ) { // Corrected: 
+                 hotheart_snippet_health_record( 'ok', 'Global snippets enabled.' );
+             } else {
+                 hotheart_snippet_health_record( 'ok', 'Global snippets disabled.' );
+             }
+-
++ 
+             // Clear the cards payload transient to reflect the change immediately in UI.
+             // The transient key now includes the global status, so it will be busted automatically.
+             // No need to explicitly delete_transient here, as the key will change.
+-
++ 
+             wp_safe_redirect( add_query_arg( array( 'page' => 'hotheart-snippet-manager', 'global_toggled' => '1' ), admin_url( 'admin.php' ) ) );
+             exit;
+-        } elseif ( 'toggle_module' ===  ) {
++        } elseif ( 'toggle_module' ===  ) { // Corrected: 
+             if ( empty( ['hotheart_toggle_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( ['hotheart_toggle_nonce'] ) ), 'hotheart_toggle_snippet_module' ) ) {
+                 wp_die( esc_html__( 'Nonce verification failed.', 'hotheart-snippet-control-center' ) );
+             }
+@@ -507,9 +509,9 @@
+     }
+ 
+      = (int) get_option( 'hotheart_index_card_refresh_ts', 0 );
+-     = hotheart_get_disabled_code_modules();
+-     = (bool) get_option( 'hotheart_global_snippets_enabled', true ); // Get global status
+-     = 'hotheart_cc_payload_v2_' . md5( wp_json_encode(  ) . '|' . wp_json_encode(  ) . '|' .  );
+-     = get_transient(  );
+-    if ( ! is_array(  ) ) {
++     = hotheart_get_disabled_code_modules(); // This now returns only individually disabled modules // Corrected: 
++     = (bool) get_option( 'hotheart_global_snippets_enabled', true ); // Get global status // Corrected: 
++     = 'hotheart_cc_payload_v2_' . md5( wp_json_encode(  ) . '|' . wp_json_encode(  ) . '|' .  . '|' . (  ? 'enabled' : 'disabled' ) ); // Corrected: , , , , 
++     = get_transient(  ); // Corrected: , 
++    if ( ! is_array(  ) ) { // Corrected: 
+        = array();
+       foreach (  as  =>  ) {
+          = isset( [  ] ) ? [  ] : array();
+@@ -572,7 +574,7 @@
+     <div class="wrap hotheart-snippet-wrap">
+       <h1><?php esc_html_e( '스니펫 시스템 통합 제어 센터', 'hotheart-snippet-control-center' ); ?></h1>
+ 
+-      <?php if ( !  ) : ?>
++      <?php if ( !  ) : ?> // Corrected: 
+           <div class="notice notice-warning is-dismissible">
+               <p><strong><?php esc_html_e( '경고:', 'hotheart-snippet-control-center' ); ?></strong> <?php esc_html_e( '모든 스니펫이 전체적으로 비활성화되어 있습니다. 개별 스니펫의 활성화 상태와 관계없이 로드되지 않습니다.', 'hotheart-snippet-control-center' ); ?></p>
+           </div>
+@@ -586,7 +588,7 @@
+         <form method="post" style="margin: 0; display:inline-flex; gap:8px;">
+           <?php wp_nonce_field( 'hotheart_refresh_index_cards', 'hotheart_refresh_nonce' ); ?>
+           <input type="hidden" name="hotheart_snippet_action" value="refresh_index_cards">
+-          <button type="submit" class="button button-primary"><?php esc_html_e( '수동 업데이트', 'hotheart-snippet-control-center' ); ?></button>
++          <button type="submit" class="button button-primary"><?php esc_html_e( '수동 업데이트', 'hotheart-snippet-control-center' ); ?></button> 
+           <?php // English note: Home button returns to snippet control center page 1. ?>
+           <a class="button" href="<?php echo esc_url( add_query_arg( array( 'page' => 'hotheart-snippet-manager', 'sn_page' => 1 ), admin_url( 'admin.php' ) ) ); ?>"><?php esc_html_e( '홈', 'hotheart-snippet-control-center' ); ?></a>
+         </form>
+@@ -595,7 +597,7 @@
+             <?php wp_nonce_field( 'hotheart_toggle_global_snippets', 'hotheart_global_toggle_nonce' ); ?>
+             <input type="hidden" name="hotheart_snippet_action" value="toggle_global_snippets">
+             <label for="hotheart_global_snippets_toggle" style="font-weight:600;"><?php esc_html_e( '전체 스니펫 활성화:', 'hotheart-snippet-control-center' ); ?></label>
+-            <label class="hotheart-switch" title="<?php echo  ? esc_attr__( '전체 스니펫 활성화됨', 'hotheart-snippet-control-center' ) : esc_attr__( '전체 스니펫 비활성화됨', 'hotheart-snippet-control-center' ); ?>">
+-                <input type="checkbox" id="hotheart_global_snippets_toggle" <?php checked(  ); ?> onchange="this.form.submit();">
++            <label class="hotheart-switch" title="<?php echo  ? esc_attr__( '전체 스니펫 활성화됨', 'hotheart-snippet-control-center' ) : esc_attr__( '전체 스니펫 비활성화됨', 'hotheart-snippet-control-center' ); ?>"> // Corrected: 
++                <input type="checkbox" id="hotheart_global_snippets_toggle" <?php checked(  ); ?> onchange="this.form.submit();"> // Corrected: 
+                 <span class="hotheart-slider"></span>
+             </label>
+         </form>
+@@ -668,6 +670,7 @@
+         .status-dot.is-green { background: #46b450; box-shadow: 0 0 0 2px rgba(70,180,80,0.12); }
+         .status-dot.is-orange { background: #dba617; box-shadow: 0 0 0 2px rgba(219,166,23,0.15); }
+         .status-dot.is-red { background: #d63638; box-shadow: 0 0 0 2px rgba(214,54,56,0.12); }
++        .snippet-card.is-globally-disabled { opacity: 0.6; border-top-color: #8c8f94; }
+         .status-indicator.is-auto-disabled { color: #dba617; }
+         .snippet-card.is-auto-disabled { opacity: 0.85; border-top-color: #dba617; }
+         .snippet-card.is-auto-disabled .card-error { background: #fef8e7; border-left-color: #dba617; color: #7a5c0a; }
+@@ -911,7 +914,7 @@
+ 
+ if ( ! function_exists( 'hotheart_get_module_runtime_status' ) ) {
+     function hotheart_get_module_runtime_status(  ) {
+-        // If global snippets are disabled, all modules are considered globally disabled.
+-         = (bool) get_option( 'hotheart_global_snippets_enabled', true );
+-        if ( !  ) {
++        // If global snippets are disabled, all modules are considered globally disabled. // Corrected: 
++         = (bool) get_option( 'hotheart_global_snippets_enabled', true ); // Corrected: 
++        if ( !  ) { // Corrected: 
+             return array(
+                 'state' => 'globally-disabled',
+                 'label' => esc_html__( '전체 비활성', 'hotheart-snippet-control-center' ),
+@@ -923,7 +926,7 @@
+ 
+         // If global snippets are enabled, proceed with individual module status check.
+ 
+-         = hotheart_get_disabled_code_modules();
+-        if ( in_array( , , true ) ) {
++         = hotheart_get_disabled_code_modules(); // Corrected: 
++        if ( in_array( , , true ) ) { // Corrected: , 
+             // Read auto_disabled from cache file first (static cached, one read per page load)
+              = array();
+              = hotheart_read_cached_file_data();
+otheart_restore_cache_on_init' ) ) {
 
   function hotheart_restore_cache_on_init() {
 
@@ -2078,3 +2241,132 @@ if ( ! function_exists( 'hotheart_get_module_runtime_status' ) ) {
 
 
 
+--- c:\Users\ssii\Local Sites\new-e\app\public\wp-content\code_snippets\new_code_snitep\snippet-control-center\snippet-control-center.php
++++ c:\Users\ssii\Local Sites\new-e\app\public\wp-content\code_snippets\new_code_snitep\snippet-control-center\snippet-control-center.php
+@@ -23,6 +23,7 @@
+     if ( function_exists( 'hotheart_scan_and_cache_modules' ) ) {
+         hotheart_scan_and_cache_modules();
+     }
++    add_option( 'hotheart_global_snippets_enabled', true, '', 'no' ); // Add global snippets enabled option
+ }
+ register_activation_hook( __FILE__, 'hotheart_snippet_control_center_activate' ); // Keep hook for future use if needed
+ 
+@@ -37,6 +38,7 @@
+     delete_option( 'hotheart_snippet_health_state' );
+     delete_option( 'hotheart_disabled_code_modules' );
+     delete_option( 'hotheart_auto_disabled_code_modules' );
++    delete_option( 'hotheart_global_snippets_enabled' ); // Clean up global snippets enabled option
+     delete_transient( 'hotheart_snippet_folders_scan' );
+ }
+ register_deactivation_hook( __FILE__, 'hotheart_snippet_control_center_deactivate' );
+@@ -176,6 +178,14 @@
+     if ( $loaded ) { return; }
+      = true;
+ 
++    // Check global snippet status first
++     = (bool) get_option( 'hotheart_global_snippets_enabled', true );
++    if ( !  ) {
++        // If global snippets are disabled, do not load any modules.
++        // hotheart_snippet_health_record( 'ok', 'All snippets globally disabled.' ); // Optionally log, but avoid excessive logging on every page load.
++        return;
++    }
++
+      = trailingslashit( WP_CONTENT_DIR . '/code_snippets' );
+     if ( ! is_dir(  ) || ! is_readable(  ) ) { return; }
+ 
+@@ -455,6 +465,26 @@
+             hotheart_snippet_health_record( 'ok', 'Manual refresh: scanned and cached ' .  . ' modules.' );
+             wp_safe_redirect( add_query_arg( array( 'page' => 'hotheart-snippet-manager', 'refreshed' => '1' ), admin_url( 'admin.php' ) ) );
+             exit;
++        } elseif ( 'toggle_global_snippets' ===  ) {
++            if ( empty( ['hotheart_global_toggle_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( ['hotheart_global_toggle_nonce'] ) ), 'hotheart_toggle_global_snippets' ) ) {
++                wp_die( esc_html__( 'Nonce verification failed.', 'hotheart-snippet-control-center' ) );
++            }
++             = (bool) get_option( 'hotheart_global_snippets_enabled', true );
++             = ! ;
++            update_option( 'hotheart_global_snippets_enabled', , false );
++
++            if (  ) {
++                hotheart_snippet_health_record( 'ok', 'Global snippets enabled.' );
++            } else {
++                hotheart_snippet_health_record( 'ok', 'Global snippets disabled.' );
++            }
++
++            // Clear the cards payload transient to reflect the change immediately in UI.
++            // The transient key now includes the global status, so it will be busted automatically.
++            // No need to explicitly delete_transient here, as the key will change.
++
++            wp_safe_redirect( add_query_arg( array( 'page' => 'hotheart-snippet-manager', 'global_toggled' => '1' ), admin_url( 'admin.php' ) ) );
++            exit;
+         } elseif ( 'toggle_module' ===  ) {
+             if ( empty( ['hotheart_toggle_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( ['hotheart_toggle_nonce'] ) ), 'hotheart_toggle_snippet_module' ) ) {
+                 wp_die( esc_html__( 'Nonce verification failed.', 'hotheart-snippet-control-center' ) );
+@@ -507,7 +537,8 @@
+     }
+ 
+      = (int) get_option( 'hotheart_index_card_refresh_ts', 0 );
+-     = hotheart_get_disabled_code_modules();
++     = hotheart_get_disabled_code_modules(); // This now returns only individually disabled modules
++     = (bool) get_option( 'hotheart_global_snippets_enabled', true ); // Get global status
+      = 'hotheart_cc_payload_v2_' . md5( wp_json_encode(  ) . '|' . wp_json_encode(  ) . '|' .  );
+      = get_transient(  );
+     if ( ! is_array(  ) ) {
+@@ -572,6 +603,12 @@
+     <div class="wrap hotheart-snippet-wrap">
+       <h1><?php esc_html_e( '스니펫 시스템 통합 제어 센터', 'hotheart-snippet-control-center' ); ?></h1>
+ 
++      <?php if ( !  ) : ?>
++          <div class="notice notice-warning is-dismissible">
++              <p><strong><?php esc_html_e( '경고:', 'hotheart-snippet-control-center' ); ?></strong> <?php esc_html_e( '모든 스니펫이 전체적으로 비활성화되어 있습니다. 개별 스니펫의 활성화 상태와 관계없이 로드되지 않습니다.', 'hotheart-snippet-control-center' ); ?></p>
++          </div>
++      <?php endif; ?>
++
+       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px 0;">
+         <form method="post" style="margin: 0; display:inline-flex; gap:8px;">
+           <?php wp_nonce_field( 'hotheart_refresh_index_cards', 'hotheart_refresh_nonce' ); ?>
+@@ -580,6 +617,16 @@
+           <?php // English note: Home button returns to snippet control center page 1. ?>
+           <a class="button" href="<?php echo esc_url( add_query_arg( array( 'page' => 'hotheart-snippet-manager', 'sn_page' => 1 ), admin_url( 'admin.php' ) ) ); ?>"><?php esc_html_e( '홈', 'hotheart-snippet-control-center' ); ?></a>
+         </form>
++
++        <form method="post" style="margin: 0; display:inline-flex; gap:8px; align-items:center;">
++            <?php wp_nonce_field( 'hotheart_toggle_global_snippets', 'hotheart_global_toggle_nonce' ); ?>
++            <input type="hidden" name="hotheart_snippet_action" value="toggle_global_snippets">
++            <label for="hotheart_global_snippets_toggle" style="font-weight:600;"><?php esc_html_e( '전체 스니펫 활성화:', 'hotheart-snippet-control-center' ); ?></label>
++            <label class="hotheart-switch" title="<?php echo  ? esc_attr__( '전체 스니펫 활성화됨', 'hotheart-snippet-control-center' ) : esc_attr__( '전체 스니펫 비활성화됨', 'hotheart-snippet-control-center' ); ?>">
++                <input type="checkbox" id="hotheart_global_snippets_toggle" <?php checked(  ); ?> onchange="this.form.submit();">
++                <span class="hotheart-slider"></span>
++            </label>
++        </form>
+ 
+         <form method="get" style="display:inline-flex;align-items:center;gap:8px;margin:0;">
+           <input type="hidden" name="page" value="hotheart-snippet-manager">
+@@ -668,6 +715,7 @@
+         .status-dot.is-green { background: #46b450; box-shadow: 0 0 0 2px rgba(70,180,80,0.12); }
+         .status-dot.is-orange { background: #dba617; box-shadow: 0 0 0 2px rgba(219,166,23,0.15); }
+         .status-dot.is-red { background: #d63638; box-shadow: 0 0 0 2px rgba(214,54,56,0.12); }
++        .snippet-card.is-globally-disabled { opacity: 0.6; border-top-color: #8c8f94; }
+         .status-indicator.is-auto-disabled { color: #dba617; }
+         .snippet-card.is-auto-disabled { opacity: 0.85; border-top-color: #dba617; }
+         .snippet-card.is-auto-disabled .card-error { background: #fef8e7; border-left-color: #dba617; color: #7a5c0a; }
+@@ -911,6 +959,20 @@
+ 
+ if ( ! function_exists( 'hotheart_get_module_runtime_status' ) ) {
+     function hotheart_get_module_runtime_status(  ) {
++        // If global snippets are disabled, all modules are considered globally disabled.
++         = (bool) get_option( 'hotheart_global_snippets_enabled', true );
++        if ( !  ) {
++            return array(
++                'state' => 'globally-disabled',
++                'label' => esc_html__( '전체 비활성', 'hotheart-snippet-control-center' ),
++                'led_class' => 'is-red', // Or a distinct color if preferred
++                'state_class' => 'is-globally-disabled',
++                'message' => esc_html__( '모든 스니펫이 전체적으로 비활성화되었습니다.', 'hotheart-snippet-control-center' ),
++            );
++        }
++
++        // If global snippets are enabled, proceed with individual module status check.
++
+          = hotheart_get_disabled_code_modules();
+         if ( in_array( , , true ) ) {
+             // Read auto_disabled from cache file first (static cached, one read per page load)
