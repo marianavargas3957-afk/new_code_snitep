@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fantastic Xylophone</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        h1 {
+            color: white;
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .subtitle {
+            color: rgba(255,255,255,0.9);
+            font-size: 1.2em;
+            margin-bottom: 40px;
+        }
+
+        .xylophone {
+            display: flex;
+            gap: 10px;
+            padding: 30px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+
+        .key {
+            width: 60px;
+            height: 300px;
+            border-radius: 10px 10px 5px 5px;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            position: relative;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 3px solid rgba(255,255,255,0.3);
+        }
+
+        .key:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+        }
+
+        .key:active, .key.playing {
+            transform: translateY(2px) scale(0.98);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .key-label {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-weight: bold;
+            font-size: 1.2em;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .key-note {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        .instructions {
+            margin-top: 40px;
+            background: rgba(255,255,255,0.15);
+            padding: 25px;
+            border-radius: 15px;
+            color: white;
+            max-width: 600px;
+            text-align: center;
+        }
+
+        .instructions h3 {
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+
+        .instructions p {
+            line-height: 1.6;
+            opacity: 0.9;
+        }
+
+        .key-hints {
+            margin-top: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .key-hint {
+            background: rgba(255,255,255,0.2);
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+        }
+
+        @media (max-width: 768px) {
+            .xylophone {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            
+            .key {
+                width: 50px;
+                height: 250px;
+            }
+            
+            h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>🎵 Fantastic Xylophone 🎵</h1>
+    <p class="subtitle">Click the keys or use your keyboard to play!</p>
+    
+    <div class="xylophone" id="xylophone">
+        <div class="key" data-note="C4" data-key="a" style="background: linear-gradient(180deg, #ff6b6b, #ee5a5a);">
+            <span class="key-note">C</span>
+            <span class="key-label">A</span>
+        </div>
+        <div class="key" data-note="D4" data-key="s" style="background: linear-gradient(180deg, #ffa502, #ff8c00);">
+            <span class="key-note">D</span>
+            <span class="key-label">S</span>
+        </div>
+        <div class="key" data-note="E4" data-key="d" style="background: linear-gradient(180deg, #ffd93d, #ffc107);">
+            <span class="key-note">E</span>
+            <span class="key-label">D</span>
+        </div>
+        <div class="key" data-note="F4" data-key="f" style="background: linear-gradient(180deg, #6bcf7f, #4caf50);">
+            <span class="key-note">F</span>
+            <span class="key-label">F</span>
+        </div>
+        <div class="key" data-note="G4" data-key="g" style="background: linear-gradient(180deg, #4ecdc4, #26a69a);">
+            <span class="key-note">G</span>
+            <span class="key-label">G</span>
+        </div>
+        <div class="key" data-note="A4" data-key="h" style="background: linear-gradient(180deg, #45b7d1, #03a9f4);">
+            <span class="key-note">A</span>
+            <span class="key-label">H</span>
+        </div>
+        <div class="key" data-note="B4" data-key="j" style="background: linear-gradient(180deg, #a8a8a8, #9c27b0);">
+            <span class="key-note">B</span>
+            <span class="key-label">J</span>
+        </div>
+        <div class="key" data-note="C5" data-key="k" style="background: linear-gradient(180deg, #ff6b6b, #ee5a5a);">
+            <span class="key-note">C</span>
+            <span class="key-label">K</span>
+        </div>
+    </div>
+
+    <div class="instructions">
+        <h3>How to Play</h3>
+        <p>Click on any colored key with your mouse, or press the corresponding keyboard key (A, S, D, F, G, H, J, K) to play notes!</p>
+        <div class="key-hints">
+            <span class="key-hint">⌨️ A = C</span>
+            <span class="key-hint">⌨️ S = D</span>
+            <span class="key-hint">⌨️ D = E</span>
+            <span class="key-hint">⌨️ F = F</span>
+            <span class="key-hint">⌨️ G = G</span>
+            <span class="key-hint">⌨️ H = A</span>
+            <span class="key-hint">⌨️ J = B</span>
+            <span class="key-hint">⌨️ K = C(high)</span>
+        </div>
+    </div>
+
+    <script>
+        // Audio context for generating sounds
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Note frequencies (Hz)
+        const noteFrequencies = {
+            'C4': 261.63,
+            'D4': 293.66,
+            'E4': 329.63,
+            'F4': 349.23,
+            'G4': 392.00,
+            'A4': 440.00,
+            'B4': 493.88,
+            'C5': 523.25
+        };
+
+        // Create and play a tone
+        function playNote(frequency) {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 1.5);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 1.5);
+        }
+
+        // Handle key click
+        function handleKey(keyElement) {
+            const note = keyElement.dataset.note;
+            const frequency = noteFrequencies[note];
+            
+            if (frequency) {
+                playNote(frequency);
+                
+                // Visual feedback
+                keyElement.classList.add('playing');
+                setTimeout(() => {
+                    keyElement.classList.remove('playing');
+                }, 150);
+            }
+        }
+
+        // Add click event listeners to all keys
+        document.querySelectorAll('.key').forEach(key => {
+            key.addEventListener('click', () => handleKey(key));
+        });
+
+        // Add keyboard event listener
+        document.addEventListener('keydown', (event) => {
+            if (event.repeat) return; // Prevent repeat when holding key
+            
+            const keyChar = event.key.toLowerCase();
+            const keyElement = document.querySelector(`.key[data-key="${keyChar}"]`);
+            
+            if (keyElement) {
+                handleKey(keyElement);
+            }
+        });
+
+        // Resume audio context on user interaction (required by some browsers)
+        document.addEventListener('click', () => {
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+        }, { once: true });
+    </script>
+</body>
+</html>
