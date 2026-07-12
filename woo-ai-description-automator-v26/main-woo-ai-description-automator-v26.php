@@ -104,8 +104,8 @@ if (!class_exists('Hotheart_Woo_AI_Automator_V268')) {
             }
             check_ajax_referer(self::NONCE_ACTION, 'nonce');
 
-            // Gemini Hub Connector 글로벌 변수 확인
-            global $gemini_hub_active_keys, $gemini_hub_last_error, $gemini_hub_feedback_msg, $gemini_hub_remaining_rpd, $gemini_hub_is_limited;
+            // Gemini Hub Connector 의 글로벌 브릿지 객체 확인
+            global $gemini_hub_bridge;
             
             $status = array(
                 'connected' => false,
@@ -116,30 +116,33 @@ if (!class_exists('Hotheart_Woo_AI_Automator_V268')) {
                 'last_error' => 'None',
             );
 
-            if (isset($gemini_hub_active_keys) && is_array($gemini_hub_active_keys) && !empty($gemini_hub_active_keys)) {
+            // 1. 브릿지 객체가 존재하는지 확인
+            if ( ! isset( $gemini_hub_bridge ) || ! is_object( $gemini_hub_bridge ) ) {
+                $status['message'] = 'Gemini Hub Connector 플러그인이 활성화되지 않았거나 초기화되지 않았습니다.';
+                $status['debug'] = 'Global variable $gemini_hub_bridge not found.';
+                wp_send_json_success($status);
+                return;
+            }
+
+            // 2. 실제 API 호출로 연결 테스트
+            $test_result = $gemini_hub_bridge->generate( array(
+                'system'  => 'You are a connection test bot. Reply only with "OK".',
+                'content' => 'Connection test. Please reply OK.'
+            ) );
+
+            // 3. 결과 분석
+            if ( isset( $test_result['status'] ) && $test_result['status'] === 'success' ) {
                 $status['connected'] = true;
-                $status['active_keys'] = count($gemini_hub_active_keys);
-                $status['message'] = 'Gemini Hub 연결 성공';
-                
-                if (isset($gemini_hub_remaining_rpd)) {
-                    $status['remaining_rpd'] = is_array($gemini_hub_remaining_rpd) ? json_encode($gemini_hub_remaining_rpd) : $gemini_hub_remaining_rpd;
-                }
-                
-                if (isset($gemini_hub_is_limited)) {
-                    $status['is_limited'] = $gemini_hub_is_limited;
-                }
-                
-                if (isset($gemini_hub_last_error) && !empty($gemini_hub_last_error)) {
-                    $status['last_error'] = $gemini_hub_last_error;
-                }
+                $status['message'] = '✅ Gemini Hub 연결 성공!';
+                $status['model'] = $test_result['model'] ?? 'Unknown';
+                $status['duration'] = $test_result['duration'] ?? 'N/A';
+                $status['tokens_used'] = ($test_result['input_tokens'] ?? 0) + ($test_result['output_tokens'] ?? 0);
+                $status['feedback'] = $test_result['feedback_msg'] ?? '정상 작동';
             } else {
-                $status['message'] = 'Gemini Hub 연결 실패: 활성화된 키가 없습니다.';
-                if (isset($gemini_hub_last_error) && !empty($gemini_hub_last_error)) {
-                    $status['last_error'] = $gemini_hub_last_error;
-                }
-                if (isset($gemini_hub_feedback_msg) && !empty($gemini_hub_feedback_msg)) {
-                    $status['message'] .= ' (' . $gemini_hub_feedback_msg . ')';
-                }
+                $status['message'] = '❌ Gemini Hub 연결 실패';
+                $status['error_code'] = $test_result['code'] ?? 'UNKNOWN';
+                $status['last_error'] = $test_result['feedback_msg'] ?? ($test_result['message'] ?? '알 수 없는 오류');
+                $status['suggestion'] = 'API 키 설정 또는 한도 상태를 확인하세요.';
             }
 
             wp_send_json_success($status);
