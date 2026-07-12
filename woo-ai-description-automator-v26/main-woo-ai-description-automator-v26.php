@@ -42,6 +42,7 @@ if (!class_exists('Hotheart_Woo_AI_Automator_V268')) {
             add_action('admin_menu', array($this, 'register_menu'));
             add_action('wp_ajax_save_woo_ai_v26_settings', array($this, 'ajax_save_settings'));
             add_action('wp_ajax_call_woo_ai_v26_process', array($this, 'ajax_process_single'));
+            add_action('wp_ajax_test_gemini_hub_connection', array($this, 'ajax_test_hub_connection'));
             add_action('wp_head', array($this, 'render_schema_on_product'), 100);
         }
 
@@ -95,6 +96,53 @@ if (!class_exists('Hotheart_Woo_AI_Automator_V268')) {
                 'done' => $done,
                 'remains' => max(0, $total - $done),
             );
+        }
+
+        public function ajax_test_hub_connection() {
+            if (!current_user_can('manage_options')) {
+                wp_send_json_error('FORBIDDEN');
+            }
+            check_ajax_referer(self::NONCE_ACTION, 'nonce');
+
+            // Gemini Hub Connector 글로벌 변수 확인
+            global $gemini_hub_active_keys, $gemini_hub_last_error, $gemini_hub_feedback_msg, $gemini_hub_remaining_rpd, $gemini_hub_is_limited;
+            
+            $status = array(
+                'connected' => false,
+                'message' => '',
+                'active_keys' => 0,
+                'remaining_rpd' => 'N/A',
+                'is_limited' => false,
+                'last_error' => 'None',
+            );
+
+            if (isset($gemini_hub_active_keys) && is_array($gemini_hub_active_keys) && !empty($gemini_hub_active_keys)) {
+                $status['connected'] = true;
+                $status['active_keys'] = count($gemini_hub_active_keys);
+                $status['message'] = 'Gemini Hub 연결 성공';
+                
+                if (isset($gemini_hub_remaining_rpd)) {
+                    $status['remaining_rpd'] = is_array($gemini_hub_remaining_rpd) ? json_encode($gemini_hub_remaining_rpd) : $gemini_hub_remaining_rpd;
+                }
+                
+                if (isset($gemini_hub_is_limited)) {
+                    $status['is_limited'] = $gemini_hub_is_limited;
+                }
+                
+                if (isset($gemini_hub_last_error) && !empty($gemini_hub_last_error)) {
+                    $status['last_error'] = $gemini_hub_last_error;
+                }
+            } else {
+                $status['message'] = 'Gemini Hub 연결 실패: 활성화된 키가 없습니다.';
+                if (isset($gemini_hub_last_error) && !empty($gemini_hub_last_error)) {
+                    $status['last_error'] = $gemini_hub_last_error;
+                }
+                if (isset($gemini_hub_feedback_msg) && !empty($gemini_hub_feedback_msg)) {
+                    $status['message'] .= ' (' . $gemini_hub_feedback_msg . ')';
+                }
+            }
+
+            wp_send_json_success($status);
         }
 
         private function call_bridge($mode, $system, $content) {
@@ -350,6 +398,11 @@ if (!class_exists('Hotheart_Woo_AI_Automator_V268')) {
                         <div style="flex:1;background:#fff3cd;padding:20px;border-radius:10px;text-align:center;border:1px solid #ffeeba;"><div style="font-size:12px;color:#555;">WAITING</div><strong id="stat_remains" style="font-size:24px;color:#856404;"><?php echo number_format($stats['remains']); ?></strong></div>
                     </div>
 
+                    <div style="margin-bottom:20px;text-align:right;">
+                        <button id="test_hub_btn" class="button button-primary" style="background:#28a745;border-color:#28a745;height:40px;padding:0 20px;font-weight:bold;">🔗 Gemini Hub 연결 상태 테스트</button>
+                        <span id="hub_test_result" style="margin-left:10px;font-weight:bold;"></span>
+                    </div>
+
                     <div style="display:flex;gap:25px;">
                         <div style="flex:1.5;">
                             <h3 style="margin-top:0;">Engine Prompt Settings</h3>
@@ -434,6 +487,52 @@ if (!class_exists('Hotheart_Woo_AI_Automator_V268')) {
                 refreshModeLabel();
 
                 $('#ai_mode_toggle').on('change', refreshModeLabel);
+
+                // Gemini Hub 연결 테스트 버튼 이벤트
+                $('#test_hub_btn').on('click', function() {
+                    const $btn = $(this);
+                    const $result = $('#hub_test_result');
+                    
+                    $btn.prop('disabled', true).text('테스트 중...');
+                    $result.html('<span style="color:#666;">연결 확인 중...</span>');
+                    
+                    postSafe({
+                        action: 'test_gemini_hub_connection',
+                        nonce: nonce
+                    }).done(function(res) {
+                        if (res.success && res.data) {
+                            const data = res.data;
+                            let statusHtml = '';
+                            
+                            if (data.connected) {
+                                statusHtml = '<span style="color:#28a745;">✅ ' + data.message + '</span>';
+                                statusHtml += '<br><small style="color:#666;">활성 키: ' + data.active_keys + '개 | 남은 요청: ' + data.remaining_rpd + '</small>';
+                                if (data.is_limited) {
+                                    statusHtml += '<br><small style="color:#dc3545;">⚠️ 한도 초과됨</small>';
+                                }
+                                if (data.last_error !== 'None') {
+                                    statusHtml += '<br><small style="color:#ffc107;">오류 이력: ' + data.last_error + '</small>';
+                                }
+                            } else {
+                                statusHtml = '<span style="color:#dc3545;">❌ ' + data.message + '</span>';
+                                if (data.last_error !== 'None') {
+                                    statusHtml += '<br><small style="color:#666;">상세: ' + data.last_error + '</small>';
+                                }
+                            }
+                            
+                            $result.html(statusHtml);
+                            addLog(data.connected ? 'Hub Test: SUCCESS' : 'Hub Test: FAILED - ' + data.message, data.connected ? '#0af' : '#f00');
+                        } else {
+                            $result.html('<span style="color:#dc3545;">테스트 실패</span>');
+                            addLog('Hub Test: AJAX Error', '#f00');
+                        }
+                    }).fail(function() {
+                        $result.html('<span style="color:#dc3545;">연결 오류</span>');
+                        addLog('Hub Test: Connection Failed', '#f00');
+                    }).always(function() {
+                        $btn.prop('disabled', false).text('🔗 Gemini Hub 연결 상태 테스트');
+                    });
+                });
 
                 $('#save_settings_btn').on('click', function() {
                     postSafe({
