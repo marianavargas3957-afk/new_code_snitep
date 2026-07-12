@@ -144,6 +144,22 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
             $tpm = (int) get_transient( $tpm_key );
             $rpd = (int) get_option( $rpd_key, 0 );
 
+            // API 키 인덱스 찾기 (RPD 한도 조회용)
+            $key_index = 0;
+            for ( $i = 1; $i <= 3; $i++ ) {
+                $stored_key = get_option( 'gemini_hub_api_key_' . $i );
+                if ( ! empty( $stored_key ) ) {
+                    $decrypted = function_exists( 'wp_custom_decrypt' ) ? wp_custom_decrypt( $stored_key ) : $stored_key;
+                    if ( $decrypted === $api_key ) {
+                        $key_index = $i;
+                        break;
+                    }
+                }
+            }
+
+            // 사용자 설정 RPD 한도 조회 (기본값 1000)
+            $user_rpd_limit = (int) get_option( 'gemini_hub_rpd_limit_' . $key_index, 1000 );
+
             if ( $rpm >= self::FREE_RPM_LIMIT ) {
                 return array(
                     'allowed' => false,
@@ -158,11 +174,11 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
                     'message' => "TPM 한도 초과 (" . number_format( $tpm ) . "/" . number_format( self::FREE_TPM_LIMIT ) . " 토큰/분) - API 키 #{$key_hash}",
                 );
             }
-            if ( $rpd >= self::FREE_RPD_LIMIT ) {
+            if ( $rpd >= $user_rpd_limit ) {
                 return array(
                     'allowed' => false,
                     'code'    => 429,
-                    'message' => "RPD 한도 초과 ({$rpd}/" . self::FREE_RPD_LIMIT . " 요청/일) - API 키 #{$key_hash}",
+                    'message' => "RPD 한도 초과 ({$rpd}/{$user_rpd_limit} 요청/일) - API 키 #{$key_hash}",
                 );
             }
             return array( 'allowed' => true );
@@ -517,10 +533,13 @@ if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
             if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Unauthorized', 403 );
             for ( $i = 1; $i <= 3; $i++ ) {
                 update_option( 'gemini_hub_api_key_' . $i, sanitize_text_field( $_POST[ 'api_key_' . $i ] ?? '' ) );
+                // API 키별 RPD 한도 저장 (사용자 설정값, 기본값 1000)
+                $rpd_value = isset( $_POST[ 'api_rpd_' . $i ] ) ? intval( $_POST[ 'api_rpd_' . $i ] ) : 1000;
+                update_option( 'gemini_hub_rpd_limit_' . $i, max( 1, $rpd_value ) );
             }
             update_option( 'gemini_hub_sys_prompt', wp_kses_post( $_POST['system_prompt'] ?? '' ) );
             update_option( 'gemini_hub_user_content', wp_kses_post( $_POST['user_content'] ?? '' ) );
-            wp_send_json_success( '모든 API 키와 설정이 저장되었습니다.' );
+            wp_send_json_success( '모든 API 키와 RPD 한도 설정이 저장되었습니다.' );
         }
 
         public function handle_test() {
@@ -684,11 +703,16 @@ if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
                             <button id="gh-save-all" class="button button-primary">모든 설정 저장</button>
                         </div>
                     </div>
-                    <div class="key-grid">
-                        <?php for ( $i = 1; $i <= 3; $i++ ) : ?>
-                            <div>
+                    <div class="key-grid" style="grid-template-columns:repeat(3,1fr);">
+                        <?php for ( $i = 1; $i <= 3; $i++ ) : 
+                            $saved_rpd = (int) get_option( 'gemini_hub_rpd_limit_' . $i, 1000 );
+                        ?>
+                            <div style="background:#f9f9f9; padding:10px; border-radius:4px; border:1px solid #e0e0e0;">
                                 <label><small>API Key #<?php echo (int) $i; ?></small></label>
-                                <input type="password" id="gh_api_key_<?php echo (int) $i; ?>" class="regular-text" style="width:100%;" value="<?php echo esc_attr( get_option( 'gemini_hub_api_key_' . $i ) ); ?>" placeholder="Key <?php echo (int) $i; ?>">
+                                <input type="password" id="gh_api_key_<?php echo (int) $i; ?>" class="regular-text" style="width:100%; margin-bottom:8px;" value="<?php echo esc_attr( get_option( 'gemini_hub_api_key_' . $i ) ); ?>" placeholder="Key <?php echo (int) $i; ?>">
+                                <label><small>📅 RPD 한도 (일일 요청 수)</small></label>
+                                <input type="number" id="gh_api_rpd_<?php echo (int) $i; ?>" class="regular-text" style="width:100%;" value="<?php echo esc_attr( $saved_rpd ); ?>" min="1" max="100000" placeholder="기본값: 1000">
+                                <small style="color:#888; font-size:10px;">하루에 허용할 최대 요청 수</small>
                             </div>
                         <?php endfor; ?>
                     </div>
@@ -846,7 +870,10 @@ if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
                         system_prompt: $('#gh_system').val(),
                         user_content: $('#gh_content').val()
                     };
-                    for (let i = 1; i <= 3; i++) data['api_key_' + i] = $('#gh_api_key_' + i).val();
+                    for (let i = 1; i <= 3; i++) {
+                        data['api_key_' + i] = $('#gh_api_key_' + i).val();
+                        data['api_rpd_' + i] = $('#gh_api_rpd_' + i).val();
+                    }
                     $.post(ajaxurl, data, function(res) { alert(res.data); })
                       .always(function() { $btn.prop('disabled', false).text('모든 설정 저장'); });
                 });
