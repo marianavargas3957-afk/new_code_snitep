@@ -73,9 +73,10 @@ if ( ! function_exists( 'get_gemini_hub_api_key' ) ) {
 // ============================================================
 if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
     class Gemini_AI_Hub_Connector {
-        // ✅ 수정: 기본 모델을 gemini-2.5-flash-lite (가장 저렴) 로 변경
-        private $api_base = 'https://generativelanguage.googleapis.com/v1beta/models/';
-        private $default_model = 'gemini-2.5-flash-lite';
+        // ✅ 수정: 기본 모델을 gemini-2.0-flash-exp (실제 존재하는 실험용 모델) 로 변경
+        // 참고: gemini-2.5-flash-lite 는 존재하지 않는 모델명입니다
+        private $api_base = 'https://generativelanguage.googleapis.com/v1/models/';
+        private $default_model = 'gemini-2.0-flash-exp';
 
         // 무료 티어 한도 상수
         const FREE_RPM_LIMIT = 15;
@@ -83,7 +84,7 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
         const FREE_RPD_LIMIT = 1000;
 
         /**
-         * 현재 선택된 모델명 반환 (기본값: gemini-2.5-flash-lite)
+         * 현재 선택된 모델명 반환 (기본값: gemini-2.0-flash-exp)
          */
         public function get_model_name() {
             return get_option( 'gemini_hub_model', $this->default_model );
@@ -312,7 +313,7 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
             if ( ! $api_key ) {
                 return array( 'status' => 'error', 'code' => 401, 'message' => 'API Key Missing.', 'duration' => '0s' );
             }
-            $models_api_url = 'https://generativelanguage.googleapis.com/v1beta/models';
+            $models_api_url = 'https://generativelanguage.googleapis.com/v1/models';
             $request_args = array(
                 'headers'   => array( 'Content-Type' => 'application/json' ),
                 'timeout'   => 30,
@@ -359,8 +360,8 @@ $gemini_hub_bridge = new Gemini_AI_Hub_Connector();
 // ============================================================
 if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
     class Gemini_AI_Hub_Admin {
-        // ✅ 수정: 기본 모델명 상수화
-        const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
+        // ✅ 수정: 기본 모델명 상수화 (실제 존재하는 모델)
+        const DEFAULT_MODEL = 'gemini-2.0-flash-exp';
 
         public function __construct() {
             add_action( 'admin_menu', array( $this, 'add_menu' ) );
@@ -473,7 +474,7 @@ if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
             $saved_system  = get_option( 'gemini_hub_sys_prompt', 'You are a professional mechanical designer and WordPress expert.' );
             $saved_content = get_option( 'gemini_hub_user_content', '' );
             $free_tier_on  = (bool) get_option( 'gemini_hub_free_tier_enabled', 1 );
-            // ✅ 수정: 기본 모델명을 gemini-2.5-flash-lite로 변경
+            // ✅ 수정: 기본 모델명을 gemini-2.0-flash-exp 로 변경 (실제 존재하는 모델)
             $current_model = get_option( 'gemini_hub_model', self::DEFAULT_MODEL );
 
             global $gemini_hub_bridge;
@@ -581,13 +582,13 @@ if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
                             </div>
                             <div>
                                 <span id="gh-current-model-badge" class="model-badge"><?php echo esc_html( $current_model ); ?></span>
-                                <?php if ( $current_model === 'gemini-2.5-flash-lite' ) : ?>
-                                    <span class="lite-badge">💰 최저가 기본 모델</span>
+                                <?php if ( $current_model === 'gemini-2.0-flash-exp' ) : ?>
+                                    <span class="lite-badge">💰 실험용 모델 (무료)</span>
                                 <?php endif; ?>
                             </div>
                         </div>
                         <small style="color:#006064; display:block; margin-top:8px;">
-                            ✅ <strong>기본 모델: <code>gemini-2.5-flash-lite</code></strong> — Google Gemini 라인업 중 가장 저렴하고 빠른 경량 모델입니다.
+                            ✅ <strong>기본 모델: <code>gemini-2.0-flash-exp</code></strong> — Google Gemini 의 실험용 모델로 무료로 사용 가능합니다.
                             "모델 목록 새로고침"을 클릭하면 <code>generateContent</code>를 지원하는 실제 사용 가능한 모델만 표시됩니다.
                         </small>
                     </div>
