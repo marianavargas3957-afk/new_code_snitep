@@ -123,6 +123,17 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
         }
 
         /**
+         * API 키별 RPD 한도 반환 (사용자 설정값 우선, 없으면 기본값)
+         */
+        private function get_rpd_limit( $api_key_index ) {
+            $saved_limit = get_option( 'gemini_hub_rpd_limit_' . $api_key_index );
+            if ( $saved_limit !== false && is_numeric( $saved_limit ) && $saved_limit > 0 ) {
+                return (int) $saved_limit;
+            }
+            return self::FREE_RPD_LIMIT; // 기본값 1000
+        }
+
+        /**
          * 무료 티어 한도 체크 (전체)
          */
         public function check_free_tier_limits() {
@@ -191,6 +202,7 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
             $rpm = (int) get_transient( $keys['rpm_key'] );
             $tpm = (int) get_transient( $keys['tpm_key'] );
             $rpd = (int) get_option( $keys['rpd_key'], 0 );
+            $rpd_limit = $this->get_rpd_limit( $api_key_index );
 
             if ( $rpm >= self::FREE_RPM_LIMIT ) {
                 return array( 
@@ -210,13 +222,13 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
                     'feedback_msg' => "API 키 #{$api_key_index} 의 분당 토큰 한도에 도달했습니다."
                 );
             }
-            if ( $rpd >= self::FREE_RPD_LIMIT ) {
+            if ( $rpd >= $rpd_limit ) {
                 return array( 
                     'allowed' => false, 
                     'code' => 429, 
-                    'message' => "API#{$api_key_index} RPD 한도 초과",
+                    'message' => "API#{$api_key_index} RPD 한도 초과 ({$rpd}/{$rpd_limit})",
                     'feedback_type' => 'free_tier_limit',
-                    'feedback_msg' => "API 키 #{$api_key_index} 의 일일 요청 한도에 도달했습니다."
+                    'feedback_msg' => "API 키 #{$api_key_index} 의 일일 요청 한도 (RPD: {$rpd_limit}) 에 도달했습니다."
                 );
             }
             return array( 'allowed' => true, 'index' => $api_key_index );
@@ -267,6 +279,7 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
                 $rpm = (int) get_transient( $keys['rpm_key'] );
                 $tpm = (int) get_transient( $keys['tpm_key'] );
                 $rpd = (int) get_option( $keys['rpd_key'], 0 );
+                $rpd_limit = $this->get_rpd_limit( $i );
                 
                 $total_rpm += $rpm;
                 $total_tpm += $tpm;
@@ -279,7 +292,7 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
                     'rpd' => $rpd,
                     'rpm_limit' => self::FREE_RPM_LIMIT,
                     'tpm_limit' => self::FREE_TPM_LIMIT,
-                    'rpd_limit' => self::FREE_RPD_LIMIT,
+                    'rpd_limit' => $rpd_limit,
                 );
             }
             
@@ -291,13 +304,19 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
             $total_tpm += (int) get_transient( $tpm_key_legacy );
             $total_rpd += (int) get_option( $rpd_key_legacy, 0 );
 
+            // 전체 RPD 한도는 각 키의 한도 합산
+            $total_rpd_limit = 0;
+            for ( $i = 1; $i <= 3; $i++ ) {
+                $total_rpd_limit += $this->get_rpd_limit( $i );
+            }
+
             return array(
                 'rpm'         => $total_rpm,
                 'rpm_limit'   => self::FREE_RPM_LIMIT,
                 'tpm'         => $total_tpm,
                 'tpm_limit'   => self::FREE_TPM_LIMIT,
                 'rpd'         => $total_rpd,
-                'rpd_limit'   => self::FREE_RPD_LIMIT,
+                'rpd_limit'   => $total_rpd_limit,
                 'enabled'     => (bool) get_option( 'gemini_hub_free_tier_enabled', 1 ),
                 'last_update' => get_option( 'gemini_hub_last_usage_update', '-' ),
                 'api_stats'   => $api_stats,
@@ -555,6 +574,10 @@ if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
             if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Unauthorized', 403 );
             for ( $i = 1; $i <= 3; $i++ ) {
                 update_option( 'gemini_hub_api_key_' . $i, sanitize_text_field( $_POST[ 'api_key_' . $i ] ?? '' ) );
+                // API 키별 RPD (일일 요청 수) 한도 저장 (기본값: 1000)
+                $rpd_value = isset( $_POST[ 'rpd_limit_' . $i ] ) ? intval( $_POST[ 'rpd_limit_' . $i ] ) : 1000;
+                $rpd_value = max( 1, min( 100000, $rpd_value ) ); // 범위 제한: 1 ~ 100,000
+                update_option( 'gemini_hub_rpd_limit_' . $i, $rpd_value );
             }
             update_option( 'gemini_hub_sys_prompt', wp_kses_post( $_POST['system_prompt'] ?? '' ) );
             update_option( 'gemini_hub_user_content', wp_kses_post( $_POST['user_content'] ?? '' ) );
@@ -754,9 +777,15 @@ if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
 
                     <div class="key-grid">
                         <?php for ( $i = 1; $i <= 3; $i++ ) : ?>
-                            <div>
+                            <div style="display:flex; flex-direction:column; gap:5px;">
                                 <label><small>API Key #<?php echo (int) $i; ?></small></label>
                                 <input type="password" id="gh_api_key_<?php echo (int) $i; ?>" class="regular-text" style="width:100%;" value="<?php echo esc_attr( get_option( 'gemini_hub_api_key_' . $i ) ); ?>" placeholder="Key <?php echo (int) $i; ?>">
+                                <label><small>📅 RPD 한도 (일일 요청 수)</small></label>
+                                <input type="number" id="gh_rpd_limit_<?php echo (int) $i; ?>" class="regular-text" style="width:100%; min-width:80px;" 
+                                    value="<?php echo esc_attr( get_option( 'gemini_hub_rpd_limit_' . $i, 1000 ) ); ?>" 
+                                    min="1" max="100000" step="1" 
+                                    placeholder="기본값: 1000">
+                                <small style="color:#666; font-size:10px;">범위: 1 ~ 100,000</small>
                             </div>
                         <?php endfor; ?>
                     </div>
@@ -960,7 +989,10 @@ if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
                         action: 'gemini_hub_save_settings', nonce: nonce,
                         system_prompt: $('#gh_system').val(), user_content: $('#gh_content').val()
                     };
-                    for (let i = 1; i <= 3; i++) data['api_key_' + i] = $('#gh_api_key_' + i).val();
+                    for (let i = 1; i <= 3; i++) {
+                        data['api_key_' + i] = $('#gh_api_key_' + i).val();
+                        data['rpd_limit_' + i] = $('#gh_rpd_limit_' + i).val();
+                    }
                     $.post(ajaxurl, data, function(res) { alert(res.data); })
                       .always(function() { $btn.prop('disabled', false).text('모든 설정 저장'); });
                 });
