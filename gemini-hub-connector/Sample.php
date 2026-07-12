@@ -1,14 +1,12 @@
 <?php
 /**
  * Plugin Name: 제미나이 AI 허브 커넥터 (Gemini AI Hub Connector)
- * Description: 다중 API 키 로테이션 (5 개), 무료 티어 한도 관리 (API 별 개별 모니터링), 동적 모델 선택, 내부 앱 통신 브리지.
- * Version: 3.3.1
+ * Description: 다중 API 키 로테이션 (3 개), 무료 티어 한도 관리 (API 별 개별 모니터링), 동적 모델 선택, 내부 앱 통신 브리지.
+ * Version: 3.3.2
  * Author: CEO Lee Wol Gam Seong
  *
- * [v3.3.1 변경 사항]
- * - 🛡️ Free Tier Limit Manager: 각 API 키별 RPM/TPM/RPD 사용량을 개별 게이지와 상태로 시각화
- * - 🔌 Hub Bridge Info: generate() 응답의 feedback_type, feedback_msg 변수를 Output 에 실시간 표시
- * - UI 개선: 모델 목록 창 세로 길이 확장, 불필요한 층수 표시 및 저장 메시지 제거
+ * [v3.3.2 변경 사항]
+ * - API 키 로테이션 5 개 → 3 개로 축소
  */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 if ( defined( 'GEMINI_HUB_CONNECTOR_LOADED' ) ) { return; }
@@ -54,7 +52,7 @@ if ( ! function_exists( 'wp_custom_decrypt' ) ) {
 if ( ! function_exists( 'get_gemini_hub_api_key' ) ) {
     function get_gemini_hub_api_key() {
         $keys = array();
-        for ( $i = 1; $i <= 5; $i++ ) {
+        for ( $i = 1; $i <= 3; $i++ ) {
             $k = get_option( 'gemini_hub_api_key_' . $i );
             if ( ! empty( $k ) ) {
                 $keys[] = function_exists( 'wp_custom_decrypt' ) ? wp_custom_decrypt( $k ) : $k;
@@ -136,7 +134,7 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
             $total_tpm = 0;
             $total_rpd = 0;
             
-            for ( $i = 1; $i <= 5; $i++ ) {
+            for ( $i = 1; $i <= 3; $i++ ) {
                 $keys = $this->get_api_key_usage_keys( $i );
                 $total_rpm += (int) get_transient( $keys['rpm_key'] );
                 $total_tpm += (int) get_transient( $keys['tpm_key'] );
@@ -264,7 +262,7 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
             // API 키별 사용량 배열
             $api_stats = array();
             
-            for ( $i = 1; $i <= 5; $i++ ) {
+            for ( $i = 1; $i <= 3; $i++ ) {
                 $keys = $this->get_api_key_usage_keys( $i );
                 $rpm = (int) get_transient( $keys['rpm_key'] );
                 $tpm = (int) get_transient( $keys['tpm_key'] );
@@ -329,7 +327,7 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
             if ( ! $api_key ) {
                 return array(
                     'status' => 'error', 'code' => 401,
-                    'message' => 'API Key Missing (5 개 중 입력된 키가 없음)',
+                    'message' => 'API Key Missing (3 개 중 입력된 키가 없음)',
                     'duration' => '0s', 'input_tokens' => 0, 'output_tokens' => 0,
                     'feedback_type' => 'api_key_missing',
                     'feedback_msg' => 'API 키가 설정되지 않았습니다. 관리자에게 문의하세요.',
@@ -555,7 +553,7 @@ if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
         public function handle_save_settings() {
             check_ajax_referer( 'gemini_hub_nonce', 'nonce' );
             if ( ! current_user_can( 'manage_options' ) ) wp_send_json_error( 'Unauthorized', 403 );
-            for ( $i = 1; $i <= 5; $i++ ) {
+            for ( $i = 1; $i <= 3; $i++ ) {
                 update_option( 'gemini_hub_api_key_' . $i, sanitize_text_field( $_POST[ 'api_key_' . $i ] ?? '' ) );
             }
             update_option( 'gemini_hub_sys_prompt', wp_kses_post( $_POST['system_prompt'] ?? '' ) );
@@ -755,7 +753,7 @@ if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
                     </div>
 
                     <div class="key-grid">
-                        <?php for ( $i = 1; $i <= 5; $i++ ) : ?>
+                        <?php for ( $i = 1; $i <= 3; $i++ ) : ?>
                             <div>
                                 <label><small>API Key #<?php echo (int) $i; ?></small></label>
                                 <input type="password" id="gh_api_key_<?php echo (int) $i; ?>" class="regular-text" style="width:100%;" value="<?php echo esc_attr( get_option( 'gemini_hub_api_key_' . $i ) ); ?>" placeholder="Key <?php echo (int) $i; ?>">
@@ -962,7 +960,7 @@ if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
                         action: 'gemini_hub_save_settings', nonce: nonce,
                         system_prompt: $('#gh_system').val(), user_content: $('#gh_content').val()
                     };
-                    for (let i = 1; i <= 5; i++) data['api_key_' + i] = $('#gh_api_key_' + i).val();
+                    for (let i = 1; i <= 3; i++) data['api_key_' + i] = $('#gh_api_key_' + i).val();
                     $.post(ajaxurl, data, function(res) { alert(res.data); })
                       .always(function() { $btn.prop('disabled', false).text('모든 설정 저장'); });
                 });
