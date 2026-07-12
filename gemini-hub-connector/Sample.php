@@ -1,10 +1,15 @@
 <?php
 /**
-* Plugin Name: 제미나이 AI 허브 커넥터 (Gemini AI Hub Connector)
-* Description: 다중 API 키 로테이션(5개), 무료 티어 한도 관리, 동적 모델 선택, 내부 앱 통신 브리지.
-* Version: 3.1.1
-* Author: CEO Lee Wol Gam Seong
-*/
+ * Plugin Name: 제미나이 AI 허브 커넥터 (Gemini AI Hub Connector)
+ * Description: 다중 API 키 로테이션 (5 개), 무료 티어 한도 관리 (API 별 개별 모니터링), 동적 모델 선택, 내부 앱 통신 브리지.
+ * Version: 3.3.1
+ * Author: CEO Lee Wol Gam Seong
+ *
+ * [v3.3.1 변경 사항]
+ * - 🛡️ Free Tier Limit Manager: 각 API 키별 RPM/TPM/RPD 사용량을 개별 게이지와 상태로 시각화
+ * - 🔌 Hub Bridge Info: generate() 응답의 feedback_type, feedback_msg 변수를 Output 에 실시간 표시
+ * - UI 개선: 모델 목록 창 세로 길이 확장, 불필요한 층수 표시 및 저장 메시지 제거
+ */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 if ( defined( 'GEMINI_HUB_CONNECTOR_LOADED' ) ) { return; }
 define( 'GEMINI_HUB_CONNECTOR_LOADED', true );
