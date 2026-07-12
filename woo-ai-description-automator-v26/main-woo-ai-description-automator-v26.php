@@ -1,5 +1,22 @@
 <?php
 /**
+ * =============================================================================
+ * 모듈명: Woo AI Description Automator V26 (상품 AI 설명 자동화 V26)
+ * -----------------------------------------------------------------------------
+ * 기능 요약:
+ * 1. WooCommerce 상품에 대한 AI 기반 설명 및 SEO 메타데이터를 자동 생성합니다.
+ * 2. GPT Hub Connector 및 Gemini Hub Connector 와 연동하여 다양한 AI 모델을 지원합니다.
+ * 3. 생성된 데이터는 JSON-LD 스키마 마크업 형태로 상품 메타필드 (_product_ai_json_ld) 에 저장됩니다.
+ * 4. 배치 처리 UI 를 제공하여 다수 상품의 일괄 생성 및 진행 상황 확인이 가능합니다.
+ * 5. 관리자 메뉴 (hotheart-wp-admin-utility-2) 하위에 '상품 AI 자동화' 메뉴로 등록됩니다.
+ * 
+ * 주의사항:
+ * - 본 모듈은 독립 실행형이 아니며, 반드시 'hotheart-wp-admin-utility-2' 부모 플러그인이 활성화되어야 합니다.
+ * - 부모 메뉴가 존재하지 않을 경우 자동으로 메뉴 등록을 건너뜁니다 (오류 방지).
+ * 
+ * 버전: 26.6.8 | 날짜: 2026-05-25 | 시리얼: ho2668
+ * =============================================================================
+ *
  * Module Name: Woo AI Description Automator V26
  * Description 1: Clean schema-only generator storing only _product_ai_json_ld
  * Description 2: Integrates GPT Hub Connector and Gemini Hub Connector bridges
