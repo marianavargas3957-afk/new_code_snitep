@@ -109,26 +109,36 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
         const FREE_RPD_LIMIT = 1000;      // 일일 요청 수
 
         /**
-         * 무료 티어 사용량 키 접두사
+         * 무료 티어 사용량 키 생성 (API 키별 독립 관리)
+         * @param string $type 'rpm', 'tpm', 'daily'
+         * @param string $api_key_hash API 키의 해시 값 (식별용)
          */
-        private function usage_key( $type ) {
-            return 'gemini_hub_usage_' . $type . '_' . gmdate( 'Ymd_Hi' ); // RPM/TPM용 (분 단위)
-        }
-        private function daily_key() {
-            return 'gemini_hub_usage_daily_' . gmdate( 'Ymd' ); // RPD용 (일 단위)
+        private function usage_key( $type, $api_key_hash = 'global' ) {
+            if ( $type === 'daily' ) {
+                return 'gemini_hub_usage_daily_' . $api_key_hash . '_' . gmdate( 'Ymd' );
+            }
+            return 'gemini_hub_usage_' . $type . '_' . $api_key_hash . '_' . gmdate( 'Ymd_Hi' );
         }
 
         /**
-         * 무료 티어 한도 체크
+         * API 키 해시 생성 (짧은 식별자)
          */
-        public function check_free_tier_limits() {
+        private function get_api_key_hash( $api_key ) {
+            return substr( md5( $api_key ), 0, 8 );
+        }
+
+        /**
+         * 무료 티어 한도 체크 (API 키별 독립 관리)
+         */
+        public function check_free_tier_limits( $api_key ) {
             if ( ! get_option( 'gemini_hub_free_tier_enabled', 1 ) ) {
                 return array( 'allowed' => true );
             }
 
-            $rpm_key = 'gemini_hub_usage_rpm_' . gmdate( 'Ymd_Hi' );
-            $tpm_key = 'gemini_hub_usage_tpm_' . gmdate( 'Ymd_Hi' );
-            $rpd_key = $this->daily_key();
+            $key_hash = $this->get_api_key_hash( $api_key );
+            $rpm_key = 'gemini_hub_usage_rpm_' . $key_hash . '_' . gmdate( 'Ymd_Hi' );
+            $tpm_key = 'gemini_hub_usage_tpm_' . $key_hash . '_' . gmdate( 'Ymd_Hi' );
+            $rpd_key = 'gemini_hub_usage_daily_' . $key_hash . '_' . gmdate( 'Ymd' );
 
             $rpm = (int) get_transient( $rpm_key );
             $tpm = (int) get_transient( $tpm_key );
@@ -138,35 +148,36 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
                 return array(
                     'allowed' => false,
                     'code'    => 429,
-                    'message' => "RPM 한도 초과 ({$rpm}/" . self::FREE_RPM_LIMIT . " 요청/분)",
+                    'message' => "RPM 한도 초과 ({$rpm}/" . self::FREE_RPM_LIMIT . " 요청/분) - API 키 #{$key_hash}",
                 );
             }
             if ( $tpm >= self::FREE_TPM_LIMIT ) {
                 return array(
                     'allowed' => false,
                     'code'    => 429,
-                    'message' => "TPM 한도 초과 (" . number_format( $tpm ) . "/" . number_format( self::FREE_TPM_LIMIT ) . " 토큰/분)",
+                    'message' => "TPM 한도 초과 (" . number_format( $tpm ) . "/" . number_format( self::FREE_TPM_LIMIT ) . " 토큰/분) - API 키 #{$key_hash}",
                 );
             }
             if ( $rpd >= self::FREE_RPD_LIMIT ) {
                 return array(
                     'allowed' => false,
                     'code'    => 429,
-                    'message' => "RPD 한도 초과 ({$rpd}/" . self::FREE_RPD_LIMIT . " 요청/일)",
+                    'message' => "RPD 한도 초과 ({$rpd}/" . self::FREE_RPD_LIMIT . " 요청/일) - API 키 #{$key_hash}",
                 );
             }
             return array( 'allowed' => true );
         }
 
         /**
-         * 사용량 업데이트 (요청 1회 + 토큰 수)
+         * 사용량 업데이트 (요청 1 회 + 토큰 수) - API 키별 독립 관리
          */
-        public function update_usage( $input_tokens = 0, $output_tokens = 0 ) {
+        public function update_usage( $api_key, $input_tokens = 0, $output_tokens = 0 ) {
             if ( ! get_option( 'gemini_hub_free_tier_enabled', 1 ) ) return;
 
-            $rpm_key = 'gemini_hub_usage_rpm_' . gmdate( 'Ymd_Hi' );
-            $tpm_key = 'gemini_hub_usage_tpm_' . gmdate( 'Ymd_Hi' );
-            $rpd_key = $this->daily_key();
+            $key_hash = $this->get_api_key_hash( $api_key );
+            $rpm_key = 'gemini_hub_usage_rpm_' . $key_hash . '_' . gmdate( 'Ymd_Hi' );
+            $tpm_key = 'gemini_hub_usage_tpm_' . $key_hash . '_' . gmdate( 'Ymd_Hi' );
+            $rpd_key = 'gemini_hub_usage_daily_' . $key_hash . '_' . gmdate( 'Ymd' );
 
             $rpm = (int) get_transient( $rpm_key );
             $tpm = (int) get_transient( $tpm_key );
@@ -188,24 +199,82 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
         }
 
         /**
-         * 현재 사용량 통계 반환
+         * 현재 사용량 통계 반환 (모든 API 키 종합 또는 특정 키)
          */
-        public function get_usage_stats() {
-            $rpm_key = 'gemini_hub_usage_rpm_' . gmdate( 'Ymd_Hi' );
-            $tpm_key = 'gemini_hub_usage_tpm_' . gmdate( 'Ymd_Hi' );
-            $rpd_key = $this->daily_key();
+        public function get_usage_stats( $api_key = null ) {
+            $stats = array();
+            
+            if ( $api_key ) {
+                // 특정 API 키의 통계만 반환
+                $key_hash = $this->get_api_key_hash( $api_key );
+                $rpm_key = 'gemini_hub_usage_rpm_' . $key_hash . '_' . gmdate( 'Ymd_Hi' );
+                $tpm_key = 'gemini_hub_usage_tpm_' . $key_hash . '_' . gmdate( 'Ymd_Hi' );
+                $rpd_key = 'gemini_hub_usage_daily_' . $key_hash . '_' . gmdate( 'Ymd' );
+
+                return array(
+                    'api_key_hash' => $key_hash,
+                    'rpm'       => (int) get_transient( $rpm_key ),
+                    'rpm_limit' => self::FREE_RPM_LIMIT,
+                    'tpm'       => (int) get_transient( $tpm_key ),
+                    'tpm_limit' => self::FREE_TPM_LIMIT,
+                    'rpd'       => (int) get_option( $rpd_key, 0 ),
+                    'rpd_limit' => self::FREE_RPD_LIMIT,
+                    'enabled'   => (bool) get_option( 'gemini_hub_free_tier_enabled', 1 ),
+                    'last_update' => get_option( 'gemini_hub_last_usage_update', '-' ),
+                );
+            }
+
+            // 모든 API 키의 종합 통계 (또는 첫 번째 키 기본)
+            $keys = array();
+            for ( $i = 1; $i <= 3; $i++ ) {
+                $k = get_option( 'gemini_hub_api_key_' . $i );
+                if ( ! empty( $k ) ) {
+                    $keys[] = function_exists( 'wp_custom_decrypt' ) ? wp_custom_decrypt( $k ) : $k;
+                }
+            }
+
+            $total_rpm = 0;
+            $total_tpm = 0;
+            $total_rpd = 0;
+            $per_key_stats = array();
+
+            foreach ( $keys as $key ) {
+                $key_hash = $this->get_api_key_hash( $key );
+                $rpm_key = 'gemini_hub_usage_rpm_' . $key_hash . '_' . gmdate( 'Ymd_Hi' );
+                $tpm_key = 'gemini_hub_usage_tpm_' . $key_hash . '_' . gmdate( 'Ymd_Hi' );
+                $rpd_key = 'gemini_hub_usage_daily_' . $key_hash . '_' . gmdate( 'Ymd' );
+
+                $k_rpm = (int) get_transient( $rpm_key );
+                $k_tpm = (int) get_transient( $tpm_key );
+                $k_rpd = (int) get_option( $rpd_key, 0 );
+
+                $total_rpm += $k_rpm;
+                $total_tpm += $k_tpm;
+                $total_rpd += $k_rpd;
+
+                $per_key_stats[] = array(
+                    'api_key_index' => count($per_key_stats) + 1,
+                    'api_key_hash' => $key_hash,
+                    'rpm' => $k_rpm,
+                    'tpm' => $k_tpm,
+                    'rpd' => $k_rpd,
+                );
+            }
 
             return array(
-                'rpm'       => (int) get_transient( $rpm_key ),
-                'rpm_limit' => self::FREE_RPM_LIMIT,
-                'tpm'       => (int) get_transient( $tpm_key ),
-                'tpm_limit' => self::FREE_TPM_LIMIT,
-                'rpd'       => (int) get_option( $rpd_key, 0 ),
-                'rpd_limit' => self::FREE_RPD_LIMIT,
-                'enabled'   => (bool) get_option( 'gemini_hub_free_tier_enabled', 1 ),
-                'last_update' => get_option( 'gemini_hub_last_usage_update', '-' ),
+                'total_rpm'       => $total_rpm,
+                'total_tpm'       => $total_tpm,
+                'total_rpd'       => $total_rpd,
+                'rpm_limit'       => self::FREE_RPM_LIMIT * max(1, count($keys)),
+                'tpm_limit'       => self::FREE_TPM_LIMIT * max(1, count($keys)),
+                'rpd_limit'       => self::FREE_RPD_LIMIT * max(1, count($keys)),
+                'enabled'         => (bool) get_option( 'gemini_hub_free_tier_enabled', 1 ),
+                'last_update'     => get_option( 'gemini_hub_last_usage_update', '-' ),
+                'per_key_stats'   => $per_key_stats,
+                'active_keys'     => count($keys),
             );
         }
+
 
         /**
          * AI 응답 생성
@@ -213,25 +282,26 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
         public function generate( $args = array() ) {
             $start_time = microtime( true );
 
-            // [1] 무료 티어 한도 체크
-            $limit_check = $this->check_free_tier_limits();
-            if ( ! $limit_check['allowed'] ) {
+            // API 키 먼저 가져오기
+            $api_key = get_gemini_hub_api_key();
+            if ( ! $api_key ) {
                 return array(
                     'status'   => 'error',
-                    'code'     => $limit_check['code'],
-                    'message'  => 'FREE_TIER_LIMIT: ' . $limit_check['message'],
+                    'code'     => 401,
+                    'message'  => 'API Key Missing (3 개 중 입력된 키가 없음)',
                     'duration' => '0s',
                     'input_tokens'  => 0,
                     'output_tokens' => 0,
                 );
             }
 
-            $api_key = get_gemini_hub_api_key();
-            if ( ! $api_key ) {
+            // [1] 무료 티어 한도 체크 (API 키별)
+            $limit_check = $this->check_free_tier_limits( $api_key );
+            if ( ! $limit_check['allowed'] ) {
                 return array(
                     'status'   => 'error',
-                    'code'     => 401,
-                    'message'  => 'API Key Missing (3개 중 입력된 키가 없음)',
+                    'code'     => $limit_check['code'],
+                    'message'  => 'FREE_TIER_LIMIT: ' . $limit_check['message'],
                     'duration' => '0s',
                     'input_tokens'  => 0,
                     'output_tokens' => 0,
@@ -328,7 +398,7 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
             $output_tokens = (int) ( $usage_meta['candidatesTokenCount'] ?? 0 );
 
             // 사용량 집계
-            $this->update_usage( $input_tokens, $output_tokens );
+            $this->update_usage( $api_key, $input_tokens, $output_tokens );
 
             $new_log = $this->log_request( 'SUCCESS', "OK (in:{$input_tokens}/out:{$output_tokens})", $duration, 200 );
 
