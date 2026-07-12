@@ -121,13 +121,31 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
             $rpd = (int) get_option( $rpd_key, 0 );
 
             if ( $rpm >= self::FREE_RPM_LIMIT ) {
-                return array( 'allowed' => false, 'code' => 429, 'message' => "RPM 한도 초과 ({$rpm}/" . self::FREE_RPM_LIMIT . " 요청/분)" );
+                return array( 
+                    'allowed' => false, 
+                    'code' => 429, 
+                    'message' => "RPM 한도 초과 ({$rpm}/" . self::FREE_RPM_LIMIT . " 요청/분)",
+                    'feedback_type' => 'free_tier_limit', // 2. Free Tier Limit Manager 도달로 대기중
+                    'feedback_msg' => '현재 무료 티어 분당 요청 한도 (RPM) 에 도달했습니다. 1 분 후 다시 시도해 주세요.'
+                );
             }
             if ( $tpm >= self::FREE_TPM_LIMIT ) {
-                return array( 'allowed' => false, 'code' => 429, 'message' => "TPM 한도 초과 (" . number_format( $tpm ) . "/" . number_format( self::FREE_TPM_LIMIT ) . " 토큰/분)" );
+                return array( 
+                    'allowed' => false, 
+                    'code' => 429, 
+                    'message' => "TPM 한도 초과 (" . number_format( $tpm ) . "/" . number_format( self::FREE_TPM_LIMIT ) . " 토큰/분)",
+                    'feedback_type' => 'free_tier_limit', // 2. Free Tier Limit Manager 도달로 대기중
+                    'feedback_msg' => '현재 무료 티어 분당 토큰 한도 (TPM) 에 도달했습니다. 1 분 후 다시 시도해 주세요.'
+                );
             }
             if ( $rpd >= self::FREE_RPD_LIMIT ) {
-                return array( 'allowed' => false, 'code' => 429, 'message' => "RPD 한도 초과 ({$rpd}/" . self::FREE_RPD_LIMIT . " 요청/일)" );
+                return array( 
+                    'allowed' => false, 
+                    'code' => 429, 
+                    'message' => "RPD 한도 초과 ({$rpd}/" . self::FREE_RPD_LIMIT . " 요청/일)",
+                    'feedback_type' => 'free_tier_limit', // 2. Free Tier Limit Manager 도달로 대기중
+                    'feedback_msg' => '현재 무료 티어 일일 요청 한도 (RPD) 에 도달했습니다. 내일 다시 시도해 주세요.'
+                );
             }
             return array( 'allowed' => true );
         }
@@ -189,6 +207,9 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
                     'status' => 'error', 'code' => $limit_check['code'],
                     'message' => 'FREE_TIER_LIMIT: ' . $limit_check['message'],
                     'duration' => '0s', 'input_tokens' => 0, 'output_tokens' => 0,
+                    // 피드백 변수 추가 (2. Free Tier Limit Manager 도달로 대기중)
+                    'feedback_type' => isset($limit_check['feedback_type']) ? $limit_check['feedback_type'] : 'free_tier_limit',
+                    'feedback_msg' => isset($limit_check['feedback_msg']) ? $limit_check['feedback_msg'] : '현재 요청이 너무 많아 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.',
                 );
             }
 
@@ -196,8 +217,10 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
             if ( ! $api_key ) {
                 return array(
                     'status' => 'error', 'code' => 401,
-                    'message' => 'API Key Missing (5개 중 입력된 키가 없음)',
+                    'message' => 'API Key Missing (5 개 중 입력된 키가 없음)',
                     'duration' => '0s', 'input_tokens' => 0, 'output_tokens' => 0,
+                    'feedback_type' => 'api_key_missing',
+                    'feedback_msg' => 'API 키가 설정되지 않았습니다. 관리자에게 문의하세요.',
                 );
             }
 
@@ -209,6 +232,9 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
                         'status' => 'error', 'code' => 429,
                         'message' => 'Cooldown: ' . $remaining . 's',
                         'duration' => '0s', 'input_tokens' => 0, 'output_tokens' => 0,
+                        // 피드백 변수 추가 (1. 다른 API 를 처리중)
+                        'feedback_type' => 'processing_other_request',
+                        'feedback_msg' => '지금은 다른 요청을 처리 중입니다. 잠시 후 다시 시도해 주세요.',
                     );
                 }
             }
@@ -255,6 +281,9 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
                     'status' => 'error', 'code' => 500, 'message' => $err_msg,
                     'duration' => $duration . 's', 'log' => $new_log, 'model' => $current_model,
                     'input_tokens' => $estimated_input_tokens, 'output_tokens' => 0,
+                    // 피드백 변수 추가 (3. 지금 접속 또는 처리 불능)
+                    'feedback_type' => 'service_unavailable',
+                    'feedback_msg' => '현재 서버에 접속할 수 없거나 처리가 불가능합니다. 네트워크 상태를 확인하거나 잠시 후 다시 시도해 주세요.',
                 );
             }
 
@@ -265,10 +294,28 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
             if ( 200 !== (int) $http_code ) {
                 $detail  = $body['error']['message'] ?? 'No detail provided';
                 $new_log = $this->log_request( 'API_ERROR', "[{$current_model}] " . $detail, $duration, $http_code );
+                
+                // HTTP 상태코드별 피드백 분류
+                $feedback_type = 'service_unavailable'; // 3. 지금 접속 또는 처리 불능
+                $feedback_msg = '현재 서버에 접속할 수 없거나 처리가 불가능합니다. 네트워크 상태를 확인하거나 잠시 후 다시 시도해 주세요.';
+                
+                if ( $http_code == 429 ) {
+                    $feedback_type = 'rate_limit_exceeded';
+                    $feedback_msg = '요청 횟수가 너무 많습니다. 잠시 후 다시 시도해 주세요.';
+                } elseif ( $http_code == 401 || $http_code == 403 ) {
+                    $feedback_type = 'auth_error';
+                    $feedback_msg = '인증 오류가 발생했습니다. API 키를 확인하세요.';
+                } elseif ( $http_code == 404 ) {
+                    $feedback_type = 'model_not_found';
+                    $feedback_msg = '요청한 모델을 찾을 수 없습니다. 모델명을 확인하세요.';
+                }
+                
                 return array(
                     'status' => 'error', 'code' => $http_code, 'message' => $detail,
                     'duration' => $duration . 's', 'log' => $new_log, 'model' => $current_model,
                     'input_tokens' => $estimated_input_tokens, 'output_tokens' => 0,
+                    'feedback_type' => $feedback_type,
+                    'feedback_msg' => $feedback_msg,
                 );
             }
 
@@ -285,6 +332,8 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
                 'response' => trim( $ai_result ), 'duration' => $duration . 's',
                 'log' => $new_log, 'model' => $current_model,
                 'input_tokens' => $input_tokens, 'output_tokens' => $output_tokens,
+                'feedback_type' => 'success',
+                'feedback_msg' => '요청이 성공적으로 처리되었습니다.',
             );
         }
 
@@ -812,7 +861,17 @@ if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
                 function handleResponse(res) {
                     const d = res.data;
                     $('#gh_output').text(d.response || d.message);
-                    $('#gh-status-badge').html(`<span class="gh-badge ${d.code == 200 ? 'status-200' : 'status-err'}">HTTP ${d.code} / ${d.duration} / Model: ${d.model || 'N/A'}</span>`);
+                    
+                    // 기존 배지 + 피드백 메시지 추가
+                    let badgeHtml = `<span class="gh-badge ${d.code == 200 ? 'status-200' : 'status-err'}">HTTP ${d.code} / ${d.duration} / Model: ${d.model || 'N/A'}</span>`;
+                    
+                    // 피드백 메시지가 있으면 추가 표시 (한글)
+                    if (d.feedback_msg) {
+                        const feedbackClass = d.code == 200 ? 'style="color:#4CAF50; font-weight:bold; margin-left:10px;"' : 'style="color:#FF9800; font-weight:bold; margin-left:10px;"';
+                        badgeHtml += `<span ${feedbackClass}>💡 ${d.feedback_msg}</span>`;
+                    }
+                    
+                    $('#gh-status-badge').html(badgeHtml);
                     if (typeof d.input_tokens !== 'undefined') {
                         $('#gh-last-input').text(d.input_tokens.toLocaleString());
                         $('#gh-last-output').text((d.output_tokens || 0).toLocaleString());
