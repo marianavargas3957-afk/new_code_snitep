@@ -99,51 +99,77 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
         }
 
         /**
-         * 무료 티어 사용량 키
+         * 무료 티어 사용량 키 (API 키별)
          */
-        private function daily_key() {
+        private function daily_key( $api_key_index = null ) {
+            if ( $api_key_index !== null ) {
+                return 'gemini_hub_usage_daily_' . gmdate( 'Ymd' . '_key' . $api_key_index );
+            }
             return 'gemini_hub_usage_daily_' . gmdate( 'Ymd' );
         }
 
         /**
-         * 무료 티어 한도 체크
+         * API 키별 사용량 키 생성
+         */
+        private function get_api_key_usage_keys( $api_key_index ) {
+            return array(
+                'rpm_key' => 'gemini_hub_usage_rpm_' . gmdate( 'Ymd_Hi' . '_key' . $api_key_index ),
+                'tpm_key' => 'gemini_hub_usage_tpm_' . gmdate( 'Ymd_Hi' . '_key' . $api_key_index ),
+                'rpd_key' => $this->daily_key( $api_key_index ),
+            );
+        }
+
+        /**
+         * 무료 티어 한도 체크 (전체)
          */
         public function check_free_tier_limits() {
             if ( ! get_option( 'gemini_hub_free_tier_enabled', 1 ) ) {
                 return array( 'allowed' => true );
             }
-            $rpm_key = 'gemini_hub_usage_rpm_' . gmdate( 'Ymd_Hi' );
-            $tpm_key = 'gemini_hub_usage_tpm_' . gmdate( 'Ymd_Hi' );
-            $rpd_key = $this->daily_key();
+            // 전체 사용량 집계 (모든 API 키 합산)
+            $total_rpm = 0;
+            $total_tpm = 0;
+            $total_rpd = 0;
+            
+            for ( $i = 1; $i <= 5; $i++ ) {
+                $keys = $this->get_api_key_usage_keys( $i );
+                $total_rpm += (int) get_transient( $keys['rpm_key'] );
+                $total_tpm += (int) get_transient( $keys['tpm_key'] );
+                $total_rpd += (int) get_option( $keys['rpd_key'], 0 );
+            }
+            
+            // 레거시 키도 확인 (기존 데이터 호환성)
+            $rpm_key_legacy = 'gemini_hub_usage_rpm_' . gmdate( 'Ymd_Hi' );
+            $tpm_key_legacy = 'gemini_hub_usage_tpm_' . gmdate( 'Ymd_Hi' );
+            $rpd_key_legacy = $this->daily_key();
+            $total_rpm += (int) get_transient( $rpm_key_legacy );
+            $total_tpm += (int) get_transient( $tpm_key_legacy );
+            $total_rpd += (int) get_option( $rpd_key_legacy, 0 );
 
-            $rpm = (int) get_transient( $rpm_key );
-            $tpm = (int) get_transient( $tpm_key );
-            $rpd = (int) get_option( $rpd_key, 0 );
-
-            if ( $rpm >= self::FREE_RPM_LIMIT ) {
+            if ( $total_rpm >= self::FREE_RPM_LIMIT ) {
                 return array( 
                     'allowed' => false, 
                     'code' => 429, 
-                    'message' => "RPM 한도 초과 ({$rpm}/" . self::FREE_RPM_LIMIT . " 요청/분)",
-                    'feedback_type' => 'free_tier_limit', // 2. Free Tier Limit Manager 도달로 대기중
+                    'message' => "RPM 한도 초과 ({$total_rpm}/" . self::FREE_RPM_LIMIT . " 요청/분)",
+                    'feedback_type' => 'free_tier_limit',
                     'feedback_msg' => '현재 무료 티어 분당 요청 한도 (RPM) 에 도달했습니다. 1 분 후 다시 시도해 주세요.'
                 );
             }
-            if ( $tpm >= self::FREE_TPM_LIMIT ) {
+            if ( $total_tpm >= self::FREE_TPM_LIMIT ) {
                 return array( 
                     'allowed' => false, 
                     'code' => 429, 
-                    'message' => "TPM 한도 초과 (" . number_format( $tpm ) . "/" . number_format( self::FREE_TPM_LIMIT ) . " 토큰/분)",
-                    'feedback_type' => 'free_tier_limit', // 2. Free Tier Limit Manager 도달로 대기중
+                    'message' => "TPM 한도 초과 (" . number_format( $total_tpm ) . "/" . number_format( self::FREE_TPM_LIMIT ) . " 토큰/분)",
+                    'feedback_type' => 'free_tier_limit',
                     'feedback_msg' => '현재 무료 티어 분당 토큰 한도 (TPM) 에 도달했습니다. 1 분 후 다시 시도해 주세요.'
                 );
             }
-            if ( $rpd >= self::FREE_RPD_LIMIT ) {
+            if ( $total_rpd >= self::FREE_RPD_LIMIT ) {
                 return array( 
                     'allowed' => false, 
                     'code' => 429, 
-                    'message' => "RPD 한도 초과 ({$rpd}/" . self::FREE_RPD_LIMIT . " 요청/일)",
-                    'feedback_type' => 'free_tier_limit', // 2. Free Tier Limit Manager 도달로 대기중
+                    'message' => "RPD 한도 초과 ({$total_rpd}/" . self::FREE_RPD_LIMIT . " 요청/일)",
+                    'feedback_type' => 'free_tier_limit',
                     'feedback_msg' => '현재 무료 티어 일일 요청 한도 (RPD) 에 도달했습니다. 내일 다시 시도해 주세요.'
                 );
             }
@@ -151,46 +177,127 @@ if ( ! class_exists( 'Gemini_AI_Hub_Connector' ) ) {
         }
 
         /**
-         * 사용량 업데이트
+         * API 키별 사용량 체크
          */
-        public function update_usage( $input_tokens = 0, $output_tokens = 0 ) {
+        public function check_api_key_limits( $api_key_index ) {
+            if ( ! get_option( 'gemini_hub_free_tier_enabled', 1 ) ) {
+                return array( 'allowed' => true, 'index' => $api_key_index );
+            }
+            
+            $keys = $this->get_api_key_usage_keys( $api_key_index );
+            $rpm = (int) get_transient( $keys['rpm_key'] );
+            $tpm = (int) get_transient( $keys['tpm_key'] );
+            $rpd = (int) get_option( $keys['rpd_key'], 0 );
+
+            if ( $rpm >= self::FREE_RPM_LIMIT ) {
+                return array( 
+                    'allowed' => false, 
+                    'code' => 429, 
+                    'message' => "API#{$api_key_index} RPM 한도 초과",
+                    'feedback_type' => 'free_tier_limit',
+                    'feedback_msg' => "API 키 #{$api_key_index} 의 분당 요청 한도에 도달했습니다."
+                );
+            }
+            if ( $tpm >= self::FREE_TPM_LIMIT ) {
+                return array( 
+                    'allowed' => false, 
+                    'code' => 429, 
+                    'message' => "API#{$api_key_index} TPM 한도 초과",
+                    'feedback_type' => 'free_tier_limit',
+                    'feedback_msg' => "API 키 #{$api_key_index} 의 분당 토큰 한도에 도달했습니다."
+                );
+            }
+            if ( $rpd >= self::FREE_RPD_LIMIT ) {
+                return array( 
+                    'allowed' => false, 
+                    'code' => 429, 
+                    'message' => "API#{$api_key_index} RPD 한도 초과",
+                    'feedback_type' => 'free_tier_limit',
+                    'feedback_msg' => "API 키 #{$api_key_index} 의 일일 요청 한도에 도달했습니다."
+                );
+            }
+            return array( 'allowed' => true, 'index' => $api_key_index );
+        }
+
+        /**
+         * 사용량 업데이트 (API 키별)
+         */
+        public function update_usage( $input_tokens = 0, $output_tokens = 0, $api_key_index = null ) {
             if ( ! get_option( 'gemini_hub_free_tier_enabled', 1 ) ) return;
 
-            $rpm_key = 'gemini_hub_usage_rpm_' . gmdate( 'Ymd_Hi' );
-            $tpm_key = 'gemini_hub_usage_tpm_' . gmdate( 'Ymd_Hi' );
-            $rpd_key = $this->daily_key();
+            // API 키 인덱스가 있으면 해당 키의 사용량만 업데이트
+            if ( $api_key_index !== null ) {
+                $keys = $this->get_api_key_usage_keys( $api_key_index );
+            } else {
+                // 레거시 호환성: 기본 키 사용
+                $keys = array(
+                    'rpm_key' => 'gemini_hub_usage_rpm_' . gmdate( 'Ymd_Hi' ),
+                    'tpm_key' => 'gemini_hub_usage_tpm_' . gmdate( 'Ymd_Hi' ),
+                    'rpd_key' => $this->daily_key(),
+                );
+            }
 
-            $rpm = (int) get_transient( $rpm_key );
-            $tpm = (int) get_transient( $tpm_key );
-            $rpd = (int) get_option( $rpd_key, 0 );
             $total_tokens = (int) $input_tokens + (int) $output_tokens;
-
             $now = time();
             $ttl_1min = max( 60, 60 - ( $now % 60 ) );
 
-            set_transient( $rpm_key, $rpm + 1, $ttl_1min );
-            set_transient( $tpm_key, $tpm + $total_tokens, $ttl_1min );
-            update_option( $rpd_key, $rpd + 1 );
+            set_transient( $keys['rpm_key'], (int) get_transient( $keys['rpm_key'] ) + 1, $ttl_1min );
+            set_transient( $keys['tpm_key'], (int) get_transient( $keys['tpm_key'] ) + $total_tokens, $ttl_1min );
+            update_option( $keys['rpd_key'], (int) get_option( $keys['rpd_key'], 0 ) + 1 );
             update_option( 'gemini_hub_last_usage_update', current_time( 'mysql' ) );
         }
 
         /**
-         * 현재 사용량 통계 반환
+         * 현재 사용량 통계 반환 (전체 + API 키별)
          */
         public function get_usage_stats() {
-            $rpm_key = 'gemini_hub_usage_rpm_' . gmdate( 'Ymd_Hi' );
-            $tpm_key = 'gemini_hub_usage_tpm_' . gmdate( 'Ymd_Hi' );
-            $rpd_key = $this->daily_key();
+            // 전체 사용량 (모든 API 키 합산)
+            $total_rpm = 0;
+            $total_tpm = 0;
+            $total_rpd = 0;
+            
+            // API 키별 사용량 배열
+            $api_stats = array();
+            
+            for ( $i = 1; $i <= 5; $i++ ) {
+                $keys = $this->get_api_key_usage_keys( $i );
+                $rpm = (int) get_transient( $keys['rpm_key'] );
+                $tpm = (int) get_transient( $keys['tpm_key'] );
+                $rpd = (int) get_option( $keys['rpd_key'], 0 );
+                
+                $total_rpm += $rpm;
+                $total_tpm += $tpm;
+                $total_rpd += $rpd;
+                
+                $api_stats[] = array(
+                    'index' => $i,
+                    'rpm' => $rpm,
+                    'tpm' => $tpm,
+                    'rpd' => $rpd,
+                    'rpm_limit' => self::FREE_RPM_LIMIT,
+                    'tpm_limit' => self::FREE_TPM_LIMIT,
+                    'rpd_limit' => self::FREE_RPD_LIMIT,
+                );
+            }
+            
+            // 레거시 키도 포함
+            $rpm_key_legacy = 'gemini_hub_usage_rpm_' . gmdate( 'Ymd_Hi' );
+            $tpm_key_legacy = 'gemini_hub_usage_tpm_' . gmdate( 'Ymd_Hi' );
+            $rpd_key_legacy = $this->daily_key();
+            $total_rpm += (int) get_transient( $rpm_key_legacy );
+            $total_tpm += (int) get_transient( $tpm_key_legacy );
+            $total_rpd += (int) get_option( $rpd_key_legacy, 0 );
 
             return array(
-                'rpm'         => (int) get_transient( $rpm_key ),
+                'rpm'         => $total_rpm,
                 'rpm_limit'   => self::FREE_RPM_LIMIT,
-                'tpm'         => (int) get_transient( $tpm_key ),
+                'tpm'         => $total_tpm,
                 'tpm_limit'   => self::FREE_TPM_LIMIT,
-                'rpd'         => (int) get_option( $rpd_key, 0 ),
+                'rpd'         => $total_rpd,
                 'rpd_limit'   => self::FREE_RPD_LIMIT,
                 'enabled'     => (bool) get_option( 'gemini_hub_free_tier_enabled', 1 ),
                 'last_update' => get_option( 'gemini_hub_last_usage_update', '-' ),
+                'api_stats'   => $api_stats,
             );
         }
 
@@ -458,7 +565,7 @@ if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
             update_option( 'gemini_hub_model', $model );
             wp_send_json_success( array(
                 'model'   => $model,
-                'message' => "모델이 '{$model}'(으)로 변경되었습니다.",
+                'message' => '저장 완료',
             ) );
         }
 
@@ -579,7 +686,7 @@ if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
                 <!-- [무료 티어 토글 & 사용량] -->
                 <div class="gh-card" style="border-top:4px solid #FF5722;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                        <h3 style="margin:0;">🛡️ [4층] Free Tier Limit Manager</h3>
+                        <h3 style="margin:0;">🛡️ Free Tier Limit Manager</h3>
                         <div>
                             <span style="margin-right:10px; font-size:13px;">무료 티어 한도 제한:</span>
                             <label class="gh-switch">
@@ -614,7 +721,7 @@ if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
                 <!-- [설정 카드] -->
                 <div class="gh-card" style="border-top:4px solid #2196F3;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                        <h3 style="margin:0;">🛠️ [3층] Multi-API Key & Prompt Settings</h3>
+                        <h3 style="margin:0;">🛠️ Multi-API Key & Prompt Settings</h3>
                         <button id="gh-save-all" class="button button-primary">모든 설정 저장</button>
                     </div>
 
@@ -664,7 +771,7 @@ if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
 
                 <!-- [글로벌 변수 / 입력 / 출력 정보] -->
                 <div class="gh-card" style="border-top:4px solid #9C27B0;">
-                    <h3 style="margin:0 0 10px;">🔌 [2.5층] Hub Bridge Info (Global Variable / Input / Output)</h3>
+                    <h3 style="margin:0 0 10px;">🔌 Hub Bridge Info (Global Variable / Input / Output)</h3>
                     <div class="hub-info-grid">
                         <div class="hub-info-box">
                             <strong>🌐 Global Bridge Variable</strong>
@@ -687,7 +794,7 @@ if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
                 <!-- [AI 응답 결과] -->
                 <div class="gh-card" style="border-top:4px solid #673ab7;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                        <h3 style="margin:0;">🚀 [2층] AI Response Result</h3>
+                        <h3 style="margin:0;">🚀 AI Response Result</h3>
                         <button id="gh-basic-test" class="button button-secondary" style="background:#4CAF50; color:#fff; border:none; cursor:pointer; font-size:14px; font-weight:bold; padding:8px 15px;">기본 API 통신 테스트</button>
                         <div id="gh-status-badge"></div>
                     </div>
@@ -698,7 +805,7 @@ if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
                 <!-- [로그] -->
                 <div class="gh-card" style="border-top:4px solid #4CAF50;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                        <h3 style="margin:0;">📜 [1층] History Logs</h3>
+                        <h3 style="margin:0;">📜 History Logs</h3>
                         <button id="gh-clear-logs" class="button button-link">로그 초기화</button>
                     </div>
                     <div style="max-height:300px; overflow-y:auto;">
@@ -728,10 +835,10 @@ if ( ! class_exists( 'Gemini_AI_Hub_Admin' ) ) {
                 <!-- [모델 목록] -->
                 <div class="gh-card" style="border-top:4px solid #FFC107;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                        <h3 style="margin:0;">📚 [0층] Available Models List</h3>
+                        <h3 style="margin:0;">📚 Available Models List</h3>
                         <button id="gh-fetch-models" class="button button-secondary" style="background:#FFC107; color:#333; border:none; cursor:pointer; font-size:14px; font-weight:bold; padding:8px 15px;">사용 가능한 모델 목록 불러오기</button>
                     </div>
-                    <div id="gh-models-output" class="gh-console" style="height:300px;">모델 목록이 여기에 표시됩니다...</div>
+                    <div id="gh-models-output" class="gh-console" style="height:900px;">모델 목록이 여기에 표시됩니다...</div>
                 </div>
             </div>
 

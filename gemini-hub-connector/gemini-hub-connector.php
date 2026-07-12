@@ -2,8 +2,35 @@
 /**
 * Plugin Name: 제미나이 AI 허브 커넥터 (Gemini AI Hub Connector)
 * Description: 다중 API 키 로테이션(5개), 무료 티어 한도 관리, 내부 앱 통신 브리지.
-* Version: 3.0.0
+* Version: 3.3.0
 * Author: CEO Lee Wol Gam Seong
+ * 
+ * [코드 구조 및 주요 기능 설명]
+ * 
+ * 1. 다중 API 키 로테이션 시스템
+ *    - 최대 5 개의 Gemini API 키를 등록하여 순차적/랜덤 로테이션 수행
+ *    - 특정 키의 한도 초과 시 자동으로 다음 유효한 키로 전환 (Failover)
+ *    - API 키별 독립적인 사용량 (RPM/TPM/RPD) 추적 및 관리
+ * 
+ * 2. Free Tier 한도 관리 (Free Tier Limit Manager)
+ *    - 분당 요청 수 (RPM), 분당 토큰 (TPM), 일일 요청 수 (RPD) 실시간 모니터링
+ *    - 한도 도달 예상 시 사전 경고 및 요청 대기 큐잉 처리
+ *    - 관리자 페이지에서 API 키별 한도 상태를 시각적으로 표시 및 제어 가능
+ * 
+ * 3. 동적 모델 선택 및 최적화
+ *    - 기본 모델: gemini-2.0-flash-exp (가장 저렴하고 빠른 모델 자동 선정)
+ *    - 사용 가능한 모델 목록을 확장 UI 를 통해 제공 (최대 3 배 리스트 표시)
+ *    - HTTP 404 오류 방지를 위한 존재하는 모델명 검증 로직 내장
+ * 
+ * 4. 글로벌 브리지 패턴 (Global Bridge Pattern)
+ *    - 전역 변수 $gemini_hub_bridge 를 통해 다른 플러그인/테마에서 AI 기능 호출 가능
+ *    - 간단한 generate(['system'=>'...', 'content'=>'...']) 호출로 연동 완료
+ *    - 복잡한 인증 및 로테이션 로직을 추상화하여 제공
+ * 
+ * 5. 사용자 피드백 및 오류 처리
+ *    - 상황별 상세 피드백 메시지 제공 (처리 중, 한도 도달, 서비스 불가 등)
+ *    - 친절한 한글 오류 메시지 및 아이콘 표시로 UX 개선
+ *    - 불필요한 시스템 메시지 (층수 표시 등) 제거로 인터페이스 정제
 */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 if ( defined( 'GEMINI_HUB_CONNECTOR_LOADED' ) ) { return; }
