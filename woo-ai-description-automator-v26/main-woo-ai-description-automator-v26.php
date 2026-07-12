@@ -29,14 +29,39 @@ if (!class_exists('Hotheart_Woo_AI_Automator_V268')) {
         }
 
         public function register_menu() {
-            add_submenu_page(
-                'hotheart-wp-admin-utility-2',
-                '상품 AI 자동화',
-                '상품 AI 자동화',
-                'manage_options',
-                self::MENU_SLUG,
-                array($this, 'render_admin_page')
-            );
+            // Check if parent menu exists, if not, add as top-level menu
+            global $menu;
+            $parent_exists = false;
+            if (is_array($menu)) {
+                foreach ($menu as $menu_item) {
+                    if (isset($menu_item[2]) && $menu_item[2] === 'hotheart-wp-admin-utility-2') {
+                        $parent_exists = true;
+                        break;
+                    }
+                }
+            }
+            
+            if ($parent_exists) {
+                add_submenu_page(
+                    'hotheart-wp-admin-utility-2',
+                    '상품 AI 자동화',
+                    '상품 AI 자동화',
+                    'manage_options',
+                    self::MENU_SLUG,
+                    array($this, 'render_admin_page')
+                );
+            } else {
+                // Add as top-level menu if parent doesn't exist
+                add_menu_page(
+                    '상품 AI 자동화',
+                    '상품 AI 자동화',
+                    'manage_options',
+                    self::MENU_SLUG,
+                    array($this, 'render_admin_page'),
+                    'dashicons-admin-products',
+                    56
+                );
+            }
         }
 
         private function get_stats() {
