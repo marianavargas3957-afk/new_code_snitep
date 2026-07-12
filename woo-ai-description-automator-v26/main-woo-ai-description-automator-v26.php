@@ -102,6 +102,13 @@ if (!class_exists('Hotheart_Woo_AI_Automator_V268')) {
              * Integration Note (2026-05-25):
              * Ollama is intentionally disabled by request.
              * Supported engines: gpt-hub-connector / gemini-hub-connector only.
+             * 
+             * Gemini Hub Global Variables Reference:
+             * - $gemini_hub_active_keys: 현재 활성화된 API 키 목록
+             * - $gemini_hub_remaining_rpd: 키별 남은 일일 요청 가능 횟수
+             * - $gemini_hub_is_limited: 키별 한도 초과 여부
+             * - $gemini_hub_last_error: 마지막 발생 오류 메시지
+             * - $gemini_hub_feedback_msg: 사용자에게 표시할 오류 메시지
              */
             if ($mode === 'gpt') {
                 global $gpt_hub_bridge;
@@ -129,6 +136,10 @@ if (!class_exists('Hotheart_Woo_AI_Automator_V268')) {
             if (is_array($res) && isset($res['response']) && is_string($res['response'])) {
                 return array('ok' => true, 'text' => $res['response']);
             }
+            
+            // 추가 오류 정보 수집을 위한 글로벌 변수 확인 (선택적 디버깅)
+            // global $gemini_hub_feedback_msg, $gemini_hub_error_code;
+            
             return array('ok' => false, 'error' => is_array($res) && !empty($res['message']) ? $res['message'] : 'GEMINI_GENERATE_FAILED');
         }
 
