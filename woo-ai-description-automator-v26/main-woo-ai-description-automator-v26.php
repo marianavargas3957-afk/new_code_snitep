@@ -29,7 +29,7 @@ if (!class_exists('Hotheart_Woo_AI_Automator_V268')) {
         }
 
         public function register_menu() {
-            // Check if parent menu exists, if not, add as top-level menu
+            // Only add as submenu if parent menu exists
             global $menu;
             $parent_exists = false;
             if (is_array($menu)) {
@@ -50,18 +50,8 @@ if (!class_exists('Hotheart_Woo_AI_Automator_V268')) {
                     self::MENU_SLUG,
                     array($this, 'render_admin_page')
                 );
-            } else {
-                // Add as top-level menu if parent doesn't exist
-                add_menu_page(
-                    '상품 AI 자동화',
-                    '상품 AI 자동화',
-                    'manage_options',
-                    self::MENU_SLUG,
-                    array($this, 'render_admin_page'),
-                    'dashicons-admin-products',
-                    56
-                );
             }
+            // If parent doesn't exist, do not register menu at all
         }
 
         private function get_stats() {
