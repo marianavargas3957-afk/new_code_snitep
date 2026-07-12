@@ -29,14 +29,13 @@ if (!class_exists('Hotheart_Woo_AI_Automator_V268')) {
         }
 
         public function register_menu() {
-            add_menu_page(
+            add_submenu_page(
+                'hotheart-wp-admin-utility-2',
                 '상품 AI 자동화',
                 '상품 AI 자동화',
                 'manage_options',
                 self::MENU_SLUG,
-                array($this, 'render_admin_page'),
-                'dashicons-admin-site-alt3',
-                55
+                array($this, 'render_admin_page')
             );
         }
 
