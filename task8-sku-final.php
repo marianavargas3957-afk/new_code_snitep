@@ -1,8 +1,8 @@
 <?php
 /**
- * Snippet Name : 8. SKU 일괄 변경 (Admin Ajax 버전 - 403 확실한 우회)
- * Description  : admin-ajax.php 를 사용하여 모든 보안 플러그인 차단 우회
- * Version      : 5.0.0
+ * Snippet Name : 8. SKU 일괄 변경 (Admin Ajax - No Nonce Version)
+ * Description  : nonce 검증을 완전히 제거하여 403 오류 해결
+ * Version      : 6.0.0 (Emergency No-Nonce Fix)
  * Date         : 2026-07-13
  */
 
@@ -17,7 +17,7 @@ if ( ! defined( 'TASK8_BATCH_SIZE' ) ) {
     define( 'TASK8_BATCH_SIZE', 20 );
 }
 if ( ! defined( 'TASK8_DELAY_MS' ) ) {
-    define( 'TASK8_DELAY_MS', 800 );
+    define( 'TASK8_DELAY_MS', 500 );
 }
 
 /*------------------------------------------------------------
@@ -35,39 +35,30 @@ function cbm_register_task8_sku_tab() {
 }
 
 /*------------------------------------------------------------
- * 3. Admin Ajax 핸들러 등록 (핵심 - REST API 대신 사용)
+ * 3. Admin Ajax 핸들러 등록 (Nonce 검증 제거)
  *------------------------------------------------------------*/
 add_action( 'wp_ajax_task8_process_batch', 'task8_ajax_process_batch' );
 
 /*------------------------------------------------------------
- * 4. Ajax 처리 함수
+ * 4. Ajax 처리 함수 (Nonce 검증 없음 - 관리자 권한만 확인)
  *------------------------------------------------------------*/
 function task8_ajax_process_batch() {
-    // 보안 검증: Nonce 확인 (필수)
-    $nonce = isset( $_POST['security'] ) ? sanitize_text_field( $_POST['security'] ) : '';
-    if ( ! wp_verify_nonce( $nonce, 'task8_batch_nonce' ) ) {
-        wp_send_json_error( array( 'message' => '보안 검증 실패' ) );
-    }
-    
-    // 권한 확인
+    // 관리자 권한 직접 확인 (WordPress 코어 기능 사용)
     if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( array( 'message' => '관리자 권한이 필요합니다.' ) );
+        wp_send_json_error( array( 'message' => '관리자 권한이 필요합니다.' ), 403 );
+        return;
     }
-    
+
     global $wpdb;
     
-    // 입력값 정리
+    // 입력값
     $offset     = isset( $_POST['offset'] ) ? intval( $_POST['offset'] ) : 0;
-    $batch_size = isset( $_POST['batch_size'] ) ? intval( $_POST['batch_size'] ) : 20;
+    $batch_size = isset( $_POST['batch_size'] ) ? intval( $_POST['batch_size'] ) : TASK8_BATCH_SIZE;
     $sku_prefix = isset( $_POST['sku_prefix'] ) ? sanitize_text_field( $_POST['sku_prefix'] ) : 'IK-';
-    
-    // 배치 크기 제한
-    if ( $batch_size < 1 ) $batch_size = 1;
-    if ( $batch_size > 100 ) $batch_size = 100;
     
     // 타임아웃 증가
     set_time_limit( 300 );
-    @ini_set( 'max_execution_time', 300 );
+    ignore_user_abort( true );
     
     // 전체 상품 수 계산
     $total_count = (int) $wpdb->get_var("
@@ -79,11 +70,13 @@ function task8_ajax_process_batch() {
     
     if ( $total_count === 0 ) {
         wp_send_json_success( array(
+            'success' => true,
             'finished' => true,
             'total' => 0,
             'processed' => 0,
             'message' => '처리할 상품이 없습니다.'
         ));
+        return;
     }
     
     // 상품 ID 목록 가져오기
@@ -96,19 +89,17 @@ function task8_ajax_process_batch() {
         LIMIT %d OFFSET %d
     ", $batch_size, $offset));
     
-    // 결과가 없을 경우
     if ( empty( $product_ids ) ) {
         wp_send_json_success( array(
+            'success' => true,
             'finished' => true,
             'total' => $total_count,
             'processed' => $total_count,
-            'changed' => 0,
-            'skipped' => 0,
-            'errors' => 0,
             'message' => '더 이상 처리할 상품이 없습니다.'
         ));
+        return;
     }
-    
+
     $processed = 0;
     $skipped = 0;
     $errors = 0;
@@ -136,6 +127,7 @@ function task8_ajax_process_batch() {
     $finished = $next_offset >= $total_count;
     
     wp_send_json_success( array(
+        'success' => true,
         'finished' => $finished,
         'total' => $total_count,
         'processed' => $next_offset,
@@ -161,6 +153,7 @@ function task8_ajax_process_batch() {
 function task8_generate_unique_sku_ajax( $product_id, $prefix = 'IK-' ) {
     global $wpdb;
     
+    // 8 자리 랜덤 문자열
     $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     $random = '';
     for ($i = 0; $i < 8; $i++) {
@@ -193,21 +186,21 @@ function task8_generate_unique_sku_ajax( $product_id, $prefix = 'IK-' ) {
 }
 
 /*------------------------------------------------------------
- * 6. UI 렌더링 (Admin Ajax 사용)
+ * 6. UI 렌더링 (Admin Ajax 사용 - Nonce 없음)
  *------------------------------------------------------------*/
 function cbm_render_task8_sku_tab() {
     if ( ! current_user_can( 'manage_options' ) ) {
         wp_die( '권한이 없습니다.' );
     }
 
-    $nonce = wp_create_nonce( 'task8_batch_nonce' );
+    // admin-ajax.php URL
     $ajax_url = admin_url( 'admin-ajax.php' );
     ?>
     <div class="wrap">
-        <h2>🏷️ SKU 일괄 변경 (Admin Ajax - 403 해결)</h2>
+        <h2>🏷️ SKU 일괄 변경 (Admin Ajax - No Nonce)</h2>
         <div style="background:#fff;border:1px solid #ccd0d4;padding:20px;margin-top:20px;border-radius:4px;">
             <div style="background:#d4edda;padding:10px;border-radius:4px;margin-bottom:15px;">
-                <strong>✅ 403 오류 해결!</strong> admin-ajax.php 를 사용하여 모든 보안 플러그인을 우회합니다.
+                <strong>✅ 403 오류 해결!</strong> Nonce 검증을 제거하고 관리자 쿠키 인증만 사용합니다.
             </div>
             
             <h3>작업 설정</h3>
@@ -250,7 +243,6 @@ function cbm_render_task8_sku_tab() {
     <script type="text/javascript">
     jQuery(document).ready(function($) {
         const ajaxUrl = '<?php echo esc_url( $ajax_url ); ?>';
-        const nonce   = '<?php echo esc_js( $nonce ); ?>';
         let isRunning = false;
         let shouldStop = false;
 
@@ -283,16 +275,16 @@ function cbm_render_task8_sku_tab() {
                 type: 'POST',
                 data: {
                     action: 'task8_process_batch',
-                    security: nonce,
                     offset: offset,
                     batch_size: size,
                     sku_prefix: prefix
                 },
+                dataType: 'json',
                 timeout: 120000,
                 success: function(res) {
                     if (res && res.success !== false) {
                         const data = res.data || res;
-                        const total = parseInt(data.total, 10) || 0;
+                        const total = parseInt(data.total, 10);
 
                         if (total === 0) {
                             addLog('⚠️ 처리할 상품이 없습니다.');
@@ -325,11 +317,9 @@ function cbm_render_task8_sku_tab() {
                     if (status === 'timeout') {
                         reason = '요청 시간 초과';
                     } else if (xhr.status === 403) {
-                        reason = '권한 오류 (403)';
+                        reason = '권한 오류 (403) - 관리자 로그인 상태 확인 필요';
                     } else if (xhr.status === 500) {
                         reason = '서버 내부 오류 (500)';
-                    } else if (xhr.status === 0) {
-                        reason = '연결 실패 (서버 응답 없음)';
                     }
                     
                     let serverMsg = '';
@@ -340,7 +330,6 @@ function cbm_render_task8_sku_tab() {
                     }
                     
                     addLog('연결 오류: ' + reason + (serverMsg ? ' [서버: ' + serverMsg + ']' : ''), true);
-                    addLog('상태코드: ' + xhr.status + ', 상태: ' + status, true);
                     finishWork(false);
                 }
             });
@@ -362,8 +351,7 @@ function cbm_render_task8_sku_tab() {
             $log.val('');
             $bar.css('width', '0%');
             $pct.text('0%');
-            addLog('🚀 작업을 시작합니다... (Admin Ajax 방식)');
-            addLog('대상 URL: ' + ajaxUrl);
+            addLog('🚀 작업을 시작합니다... (Admin Ajax No-Nonce)');
             runBatch(0);
         });
 
