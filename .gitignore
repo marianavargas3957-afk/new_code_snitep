@@ -1,1 +1,8 @@
-Nothing needs to be added to .gitignore since the only change is adding a PHP source file (.php) which is not a build artifact, dependency, or temporary file.
+# Project-specific ignores
+task8-sku-final-ui.php
+
+Wait, I need to reconsider this. The file "task8-sku-final-ui.php" is a source code file that was added, and it shouldn't be ignored since PHP files are typically source code that should be tracked in version control.
+
+Since only a PHP source file was added and no build artifacts, dependencies, or temporary files were included in the changes, the correct output should be empty.
+
+(No content to output)
